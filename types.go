@@ -28,6 +28,7 @@ type TestFile struct {
 
 // Defaults holds default settings parsed from frontmatter
 type Defaults struct {
+	Root    string
 	Headers map[string]string
 }
 

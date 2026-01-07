@@ -79,6 +79,15 @@ func parseFrontmatter(content string) (Defaults, string) {
 			continue
 		}
 
+		// Check for "root:" setting
+		if strings.HasPrefix(trimmed, "root:") {
+			defaults.Root = strings.TrimSpace(strings.TrimPrefix(trimmed, "root:"))
+			// Remove trailing slash for consistent joining
+			defaults.Root = strings.TrimSuffix(defaults.Root, "/")
+			inHeaders = false
+			continue
+		}
+
 		// Check for "headers:" section
 		if trimmed == "headers:" {
 			inHeaders = true
@@ -123,13 +132,28 @@ func parseTestBlock(name, content string, defaults Defaults) Test {
 	lines := strings.Split(content, "\n")
 
 	// Find the HTTP method and URL line
-	httpPattern := regexp.MustCompile(`^(GET|POST|PUT|PATCH|DELETE)\s+(https?://\S+)`)
+	// Supports both absolute URLs (https://...) and relative paths (/path)
+	httpPattern := regexp.MustCompile(`^(GET|POST|PUT|PATCH|DELETE)\s+(\S+)`)
 	var methodLineIdx int
 
 	for i, line := range lines {
 		if matches := httpPattern.FindStringSubmatch(line); matches != nil {
 			test.Method = matches[1]
-			test.URL = matches[2]
+			urlOrPath := matches[2]
+
+			// If it's a relative path and we have a root, prepend the root
+			if strings.HasPrefix(urlOrPath, "/") && defaults.Root != "" {
+				test.URL = defaults.Root + urlOrPath
+			} else if strings.HasPrefix(urlOrPath, "http://") || strings.HasPrefix(urlOrPath, "https://") {
+				test.URL = urlOrPath
+			} else if defaults.Root != "" {
+				// Handle paths without leading slash
+				test.URL = defaults.Root + "/" + urlOrPath
+			} else {
+				// No root and not an absolute URL - invalid but let it through for error handling
+				test.URL = urlOrPath
+			}
+
 			methodLineIdx = i
 			break
 		}

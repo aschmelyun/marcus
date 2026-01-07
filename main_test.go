@@ -9,6 +9,7 @@ func TestParseFrontmatter(t *testing.T) {
 	tests := []struct {
 		name            string
 		content         string
+		expectedRoot    string
 		expectedHeaders map[string]string
 		expectContent   string
 	}{
@@ -55,11 +56,52 @@ headers:
   Accept: application/json
 ## Test 1`,
 		},
+		{
+			name: "frontmatter with root",
+			content: `---
+root: https://api.example.com
+---
+
+## Test 1`,
+			expectedRoot:    "https://api.example.com",
+			expectedHeaders: map[string]string{},
+			expectContent:   "\n## Test 1",
+		},
+		{
+			name: "frontmatter with root and headers",
+			content: `---
+root: https://api.example.com/v2
+headers:
+  Authorization: Bearer token
+---
+
+## Test 1`,
+			expectedRoot: "https://api.example.com/v2",
+			expectedHeaders: map[string]string{
+				"Authorization": "Bearer token",
+			},
+			expectContent: "\n## Test 1",
+		},
+		{
+			name: "root with trailing slash is trimmed",
+			content: `---
+root: https://api.example.com/
+---
+
+## Test 1`,
+			expectedRoot:    "https://api.example.com",
+			expectedHeaders: map[string]string{},
+			expectContent:   "\n## Test 1",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defaults, remaining := parseFrontmatter(tt.content)
+
+			if defaults.Root != tt.expectedRoot {
+				t.Errorf("root: expected %q, got %q", tt.expectedRoot, defaults.Root)
+			}
 
 			if len(defaults.Headers) != len(tt.expectedHeaders) {
 				t.Errorf("expected %d headers, got %d", len(tt.expectedHeaders), len(defaults.Headers))
@@ -212,6 +254,42 @@ func TestParseTestBlock(t *testing.T) {
 			expectedHeader: map[string]string{
 				"Accept": "text/plain",
 			},
+		},
+		{
+			name:      "relative path with root",
+			blockName: "Relative Path",
+			content:   "GET /users",
+			defaults: Defaults{
+				Root:    "https://api.example.com",
+				Headers: map[string]string{},
+			},
+			expectedMethod: "GET",
+			expectedURL:    "https://api.example.com/users",
+			expectedHeader: map[string]string{},
+		},
+		{
+			name:      "relative path with root containing path",
+			blockName: "Relative with API path",
+			content:   "POST /users",
+			defaults: Defaults{
+				Root:    "https://api.example.com/v2",
+				Headers: map[string]string{},
+			},
+			expectedMethod: "POST",
+			expectedURL:    "https://api.example.com/v2/users",
+			expectedHeader: map[string]string{},
+		},
+		{
+			name:      "absolute URL ignores root",
+			blockName: "Absolute URL",
+			content:   "GET https://other.com/path",
+			defaults: Defaults{
+				Root:    "https://api.example.com",
+				Headers: map[string]string{},
+			},
+			expectedMethod: "GET",
+			expectedURL:    "https://other.com/path",
+			expectedHeader: map[string]string{},
 		},
 	}
 
