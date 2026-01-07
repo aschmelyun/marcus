@@ -51,21 +51,29 @@ func main() {
 		return
 	}
 
-	fmt.Printf("Found %d test(s) to run\n\n", len(tests))
+	fmt.Printf("%s (%d tests)\n\n", filename, len(tests))
 
-	for i, test := range tests {
-		fmt.Printf("[%d/%d] %s\n", i+1, len(tests), test.Name)
-		fmt.Printf("       %s %s\n", test.Method, test.URL)
+	passed := 0
+	failed := 0
 
+	for _, test := range tests {
 		if err := runTest(test); err != nil {
-			fmt.Fprintf(os.Stderr, "       FAIL: %v\n", err)
-			os.Exit(1)
+			fmt.Printf("  ✗ %s\n", test.Name)
+			fmt.Printf("    → %v\n", err)
+			failed++
+		} else {
+			fmt.Printf("  ✓ %s\n", test.Name)
+			passed++
 		}
-
-		fmt.Printf("       PASS\n")
 	}
 
-	fmt.Printf("\nAll %d test(s) passed!\n", len(tests))
+	fmt.Println()
+	if failed == 0 {
+		fmt.Printf("%d passed\n", passed)
+	} else {
+		fmt.Printf("%d passed, %d failed\n", passed, failed)
+		os.Exit(1)
+	}
 }
 
 // parseTests extracts all tests from markdown content
