@@ -28,4 +28,5 @@ jobs:
         run: |
           ./marcus tests/passing.md
           ./marcus tests/user-api.md
-          ./marcus tests/with-frontmatter.md
+          ./marcus tests/with-global-headers.md
+          ./marcus tests/with-root.md
