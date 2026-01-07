@@ -355,56 +355,55 @@ func TestParseTestBlockRetryOptions(t *testing.T) {
 	defaults := Defaults{Headers: make(map[string]string)}
 
 	tests := []struct {
-		name              string
-		content           string
-		expectedWaitFor   int
+		name               string
+		content            string
+		expectedWaitFor    int
 		expectedRetryDelay time.Duration
-		expectedRetryMax  int
+		expectedRetryMax   int
 	}{
 		{
-			name: "all retry options",
+			name: "wait and retry options",
 			content: `GET https://example.com/status
-- Wait for status: 200
-- Retry-Delay: 500ms
-- Retry-Max: 5`,
-			expectedWaitFor:   200,
+- Wait until status is 200
+- Retry 5 times every 500ms`,
+			expectedWaitFor:    200,
 			expectedRetryDelay: 500 * time.Millisecond,
-			expectedRetryMax:  5,
+			expectedRetryMax:   5,
 		},
 		{
 			name: "only wait for status",
 			content: `GET https://example.com/status
-- Wait for status: 201`,
-			expectedWaitFor:   201,
+- Wait until status is 201`,
+			expectedWaitFor:    201,
 			expectedRetryDelay: 0,
-			expectedRetryMax:  0,
+			expectedRetryMax:   0,
 		},
 		{
 			name: "retry with seconds delay",
 			content: `GET https://example.com/status
-- Wait for status: 200
-- Retry-Delay: 2s`,
-			expectedWaitFor:   200,
+- Wait until status is 200
+- Retry 3 times every 2s`,
+			expectedWaitFor:    200,
 			expectedRetryDelay: 2 * time.Second,
-			expectedRetryMax:  0,
+			expectedRetryMax:   3,
 		},
 		{
 			name: "mixed headers and retry options",
 			content: `GET https://example.com/status
 - Authorization: Bearer token
-- Wait for status: 200
+- Wait until status is 200
 - Content-Type: application/json
-- Retry-Max: 3`,
-			expectedWaitFor:   200,
-			expectedRetryDelay: 0,
-			expectedRetryMax:  3,
+- Retry 3 times every 1s`,
+			expectedWaitFor:    200,
+			expectedRetryDelay: 1 * time.Second,
+			expectedRetryMax:   3,
 		},
 		{
-			name:              "no retry options",
-			content:           "GET https://example.com/get",
-			expectedWaitFor:   0,
+			name:               "no retry options",
+			content:            "GET https://example.com/get",
+			expectedWaitFor:    0,
 			expectedRetryDelay: 0,
-			expectedRetryMax:  0,
+			expectedRetryMax:   0,
 		},
 	}
 

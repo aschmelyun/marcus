@@ -231,9 +231,8 @@ For async endpoints, wait for a specific status code:
 ## Wait for job completion
 
 GET https://api.example.com/jobs/123
-- Wait for status: 200
-- Retry-Delay: 500ms
-- Retry-Max: 10
+- Wait until status is 200
+- Retry 10 times every 500ms
 
 Assert:
 - Status is 200
@@ -242,9 +241,8 @@ Assert:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `Wait for status` | - | Status code to poll for |
-| `Retry-Delay` | 1s | Time between retries |
-| `Retry-Max` | 10 | Maximum retry attempts |
+| `Wait until status is <code>` | - | Status code to poll for |
+| `Retry <n> times every <duration>` | 10 times every 1s | Retry configuration |
 
 The test fails if the expected status isn't received within the retry limit.
 

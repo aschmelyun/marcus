@@ -11,9 +11,8 @@ These tests demonstrate waiting for a specific status code.
 This endpoint returns 200 immediately, so no retries are needed.
 
 GET /status/200
-- Wait for status: 200
-- Retry-Max: 3
-- Retry-Delay: 100ms
+- Wait until status is 200
+- Retry 3 times every 100ms
 
 Asserts:
 - Status is 200
@@ -21,9 +20,8 @@ Asserts:
 ## Test 2: Wait for status with custom settings
 
 GET /get
-- Wait for status: 200
-- Retry-Delay: 500ms
-- Retry-Max: 5
+- Wait until status is 200
+- Retry 5 times every 500ms
 
 Asserts:
 - Status is 200

@@ -172,38 +172,44 @@ func parseTestBlock(name, content string, defaults Defaults, baseDir string) Tes
 	// Parse headers and retry options (bullet points starting with "- " right after the URL line)
 	// These override any defaults
 	headerPattern := regexp.MustCompile(`^-\s+([^:]+):\s*(.+)$`)
+	waitUntilPattern := regexp.MustCompile(`(?i)^-\s+Wait until status is (\d+)$`)
+	retryPattern := regexp.MustCompile(`(?i)^-\s+Retry (\d+) times every (.+)$`)
+
 	for i := methodLineIdx + 1; i < len(lines); i++ {
 		line := lines[i]
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
+
+		// Check for natural language retry options first
+		if matches := waitUntilPattern.FindStringSubmatch(line); matches != nil {
+			if status, err := strconv.Atoi(matches[1]); err == nil {
+				test.WaitForStatus = status
+			}
+			continue
+		}
+
+		if matches := retryPattern.FindStringSubmatch(line); matches != nil {
+			if max, err := strconv.Atoi(matches[1]); err == nil {
+				test.RetryMax = max
+			}
+			if d, err := time.ParseDuration(matches[2]); err == nil {
+				test.RetryDelay = d
+			}
+			continue
+		}
+
+		// Parse as header
 		if matches := headerPattern.FindStringSubmatch(line); matches != nil {
 			optionName := strings.TrimSpace(matches[1])
 			optionValue := strings.TrimSpace(matches[2])
 
-			// Check for retry/wait options (case-insensitive)
-			switch strings.ToLower(optionName) {
-			case "wait for status":
-				if status, err := strconv.Atoi(optionValue); err == nil {
-					test.WaitForStatus = status
-				}
-			case "retry-delay":
-				if d, err := time.ParseDuration(optionValue); err == nil {
-					test.RetryDelay = d
-				}
-			case "retry-max":
-				if max, err := strconv.Atoi(optionValue); err == nil {
-					test.RetryMax = max
-				}
-			default:
-				// It's a regular HTTP header
-				test.Headers[optionName] = optionValue
-				if strings.EqualFold(optionName, "Content-Type") {
-					test.ContentType = optionValue
-				}
+			test.Headers[optionName] = optionValue
+			if strings.EqualFold(optionName, "Content-Type") {
+				test.ContentType = optionValue
 			}
 		} else {
-			break // Stop at first non-header line
+			break // Stop at first non-header/option line
 		}
 	}
 
