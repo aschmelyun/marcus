@@ -320,6 +320,82 @@ func TestParseTestBlock(t *testing.T) {
 	}
 }
 
+func TestParseTestBlockRetryOptions(t *testing.T) {
+	defaults := Defaults{Headers: make(map[string]string)}
+
+	tests := []struct {
+		name              string
+		content           string
+		expectedWaitFor   int
+		expectedRetryDelay time.Duration
+		expectedRetryMax  int
+	}{
+		{
+			name: "all retry options",
+			content: `GET https://example.com/status
+- Wait for status: 200
+- Retry-Delay: 500ms
+- Retry-Max: 5`,
+			expectedWaitFor:   200,
+			expectedRetryDelay: 500 * time.Millisecond,
+			expectedRetryMax:  5,
+		},
+		{
+			name: "only wait for status",
+			content: `GET https://example.com/status
+- Wait for status: 201`,
+			expectedWaitFor:   201,
+			expectedRetryDelay: 0,
+			expectedRetryMax:  0,
+		},
+		{
+			name: "retry with seconds delay",
+			content: `GET https://example.com/status
+- Wait for status: 200
+- Retry-Delay: 2s`,
+			expectedWaitFor:   200,
+			expectedRetryDelay: 2 * time.Second,
+			expectedRetryMax:  0,
+		},
+		{
+			name: "mixed headers and retry options",
+			content: `GET https://example.com/status
+- Authorization: Bearer token
+- Wait for status: 200
+- Content-Type: application/json
+- Retry-Max: 3`,
+			expectedWaitFor:   200,
+			expectedRetryDelay: 0,
+			expectedRetryMax:  3,
+		},
+		{
+			name:              "no retry options",
+			content:           "GET https://example.com/get",
+			expectedWaitFor:   0,
+			expectedRetryDelay: 0,
+			expectedRetryMax:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parseTestBlock("Test", tt.content, defaults)
+
+			if result.WaitForStatus != tt.expectedWaitFor {
+				t.Errorf("WaitForStatus: expected %d, got %d", tt.expectedWaitFor, result.WaitForStatus)
+			}
+
+			if result.RetryDelay != tt.expectedRetryDelay {
+				t.Errorf("RetryDelay: expected %v, got %v", tt.expectedRetryDelay, result.RetryDelay)
+			}
+
+			if result.RetryMax != tt.expectedRetryMax {
+				t.Errorf("RetryMax: expected %d, got %d", tt.expectedRetryMax, result.RetryMax)
+			}
+		})
+	}
+}
+
 func TestParseAssertions(t *testing.T) {
 	tests := []struct {
 		name     string

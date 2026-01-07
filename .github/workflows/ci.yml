@@ -30,3 +30,4 @@ jobs:
           ./marcus tests/user-api.md
           ./marcus tests/with-global-headers.md
           ./marcus tests/with-root.md
+          ./marcus tests/with-retry.md
