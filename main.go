@@ -9,9 +9,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // Test represents a single API test parsed from markdown
@@ -38,13 +40,36 @@ type TestFile struct {
 	Tests []Test
 }
 
+// TestResult holds the outcome of a single test execution
+type TestResult struct {
+	FilePath string
+	Test     Test
+	Index    int
+	Err      error
+}
+
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "Usage: marcus <file-or-directory>")
+		fmt.Fprintln(os.Stderr, "Usage: marcus [--parallel] <file-or-directory>")
 		os.Exit(1)
 	}
 
-	target := os.Args[1]
+	// Parse arguments
+	parallel := false
+	target := ""
+
+	for _, arg := range os.Args[1:] {
+		if arg == "--parallel" {
+			parallel = true
+		} else if target == "" {
+			target = arg
+		}
+	}
+
+	if target == "" {
+		fmt.Fprintln(os.Stderr, "Usage: marcus [--parallel] <file-or-directory>")
+		os.Exit(1)
+	}
 
 	testFiles, err := collectTestFiles(target)
 	if err != nil {
@@ -75,11 +100,25 @@ func main() {
 		fmt.Printf("%s (%d files, %d tests)\n\n", target, len(testFiles), totalTests)
 	}
 
-	passed := 0
-	failed := 0
+	var passed, failed int
 
+	if parallel {
+		passed, failed = runTestsParallel(testFiles)
+	} else {
+		passed, failed = runTestsSequential(testFiles)
+	}
+
+	if failed == 0 {
+		fmt.Printf("%d passed\n", passed)
+	} else {
+		fmt.Printf("%d passed, %d failed\n", passed, failed)
+		os.Exit(1)
+	}
+}
+
+// runTestsSequential runs all tests one after another
+func runTestsSequential(testFiles []TestFile) (passed, failed int) {
 	for _, tf := range testFiles {
-		// For multiple files, print the file header
 		if len(testFiles) > 1 {
 			fmt.Printf("%s\n", tf.Path)
 		}
@@ -104,12 +143,81 @@ func main() {
 		fmt.Println()
 	}
 
-	if failed == 0 {
-		fmt.Printf("%d passed\n", passed)
-	} else {
-		fmt.Printf("%d passed, %d failed\n", passed, failed)
-		os.Exit(1)
+	return passed, failed
+}
+
+// runTestsParallel runs all tests concurrently, limited by CPU cores
+func runTestsParallel(testFiles []TestFile) (passed, failed int) {
+	maxWorkers := runtime.NumCPU()
+	sem := make(chan struct{}, maxWorkers)
+
+	// Build flat list of all tests with their file context
+	type testJob struct {
+		filePath  string
+		fileIndex int
+		testIndex int
+		test      Test
 	}
+
+	var jobs []testJob
+	for fi, tf := range testFiles {
+		for ti, test := range tf.Tests {
+			jobs = append(jobs, testJob{
+				filePath:  tf.Path,
+				fileIndex: fi,
+				testIndex: ti,
+				test:      test,
+			})
+		}
+	}
+
+	// Results channel
+	results := make([]TestResult, len(jobs))
+	var wg sync.WaitGroup
+
+	for i, job := range jobs {
+		wg.Add(1)
+		go func(idx int, j testJob) {
+			defer wg.Done()
+			sem <- struct{}{}        // Acquire
+			defer func() { <-sem }() // Release
+
+			err := runTest(j.test)
+			results[idx] = TestResult{
+				FilePath: j.filePath,
+				Test:     j.test,
+				Index:    idx,
+				Err:      err,
+			}
+		}(i, job)
+	}
+
+	wg.Wait()
+
+	// Print results in order, grouped by file
+	currentFile := ""
+	for i, job := range jobs {
+		if len(testFiles) > 1 && job.filePath != currentFile {
+			if currentFile != "" {
+				fmt.Println()
+			}
+			fmt.Printf("%s\n", job.filePath)
+			currentFile = job.filePath
+		}
+
+		result := results[i]
+		if result.Err != nil {
+			fmt.Printf("  ✗ %s\n", result.Test.Name)
+			fmt.Printf("    → %v\n", result.Err)
+			failed++
+		} else {
+			fmt.Printf("  ✓ %s\n", result.Test.Name)
+			passed++
+		}
+	}
+
+	fmt.Println()
+	return passed, failed
 }
 
 // collectTestFiles gathers all test files from a file or directory path
