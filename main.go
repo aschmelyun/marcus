@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Test represents a single API test parsed from markdown
@@ -42,10 +43,12 @@ type TestFile struct {
 
 // TestResult holds the outcome of a single test execution
 type TestResult struct {
-	FilePath string
-	Test     Test
-	Index    int
-	Err      error
+	FilePath  string
+	FileIndex int
+	Test      Test
+	Index     int
+	Err       error
+	Duration  time.Duration
 }
 
 func main() {
@@ -101,24 +104,37 @@ func main() {
 	}
 
 	var passed, failed int
+	var totalDuration time.Duration
 
 	if parallel {
-		passed, failed = runTestsParallel(testFiles)
+		passed, failed, totalDuration = runTestsParallel(testFiles)
 	} else {
-		passed, failed = runTestsSequential(testFiles)
+		passed, failed, totalDuration = runTestsSequential(testFiles)
 	}
 
 	if failed == 0 {
-		fmt.Printf("%d passed\n", passed)
+		fmt.Printf("%d passed in %s\n", passed, formatDuration(totalDuration))
 	} else {
-		fmt.Printf("%d passed, %d failed\n", passed, failed)
+		fmt.Printf("%d passed, %d failed in %s\n", passed, failed, formatDuration(totalDuration))
 		os.Exit(1)
 	}
 }
 
+// formatDuration formats a duration in a human-readable way
+func formatDuration(d time.Duration) string {
+	if d < time.Second {
+		return fmt.Sprintf("%dms", d.Milliseconds())
+	}
+	return fmt.Sprintf("%.2fs", d.Seconds())
+}
+
 // runTestsSequential runs all tests one after another
-func runTestsSequential(testFiles []TestFile) (passed, failed int) {
+func runTestsSequential(testFiles []TestFile) (passed, failed int, totalDuration time.Duration) {
+	suiteStart := time.Now()
+
 	for _, tf := range testFiles {
+		fileStart := time.Now()
+
 		if len(testFiles) > 1 {
 			fmt.Printf("%s\n", tf.Path)
 		}
@@ -134,8 +150,9 @@ func runTestsSequential(testFiles []TestFile) (passed, failed int) {
 			}
 		}
 
+		fileDuration := time.Since(fileStart)
 		if len(testFiles) > 1 {
-			fmt.Println()
+			fmt.Printf("  %s\n\n", formatDuration(fileDuration))
 		}
 	}
 
@@ -143,11 +160,13 @@ func runTestsSequential(testFiles []TestFile) (passed, failed int) {
 		fmt.Println()
 	}
 
-	return passed, failed
+	totalDuration = time.Since(suiteStart)
+	return passed, failed, totalDuration
 }
 
 // runTestsParallel runs all tests concurrently, limited by CPU cores
-func runTestsParallel(testFiles []TestFile) (passed, failed int) {
+func runTestsParallel(testFiles []TestFile) (passed, failed int, totalDuration time.Duration) {
+	suiteStart := time.Now()
 	maxWorkers := runtime.NumCPU()
 	sem := make(chan struct{}, maxWorkers)
 
@@ -171,7 +190,7 @@ func runTestsParallel(testFiles []TestFile) (passed, failed int) {
 		}
 	}
 
-	// Results channel
+	// Results slice
 	results := make([]TestResult, len(jobs))
 	var wg sync.WaitGroup
 
@@ -182,27 +201,39 @@ func runTestsParallel(testFiles []TestFile) (passed, failed int) {
 			sem <- struct{}{}        // Acquire
 			defer func() { <-sem }() // Release
 
+			start := time.Now()
 			err := runTest(j.test)
 			results[idx] = TestResult{
-				FilePath: j.filePath,
-				Test:     j.test,
-				Index:    idx,
-				Err:      err,
+				FilePath:  j.filePath,
+				FileIndex: j.fileIndex,
+				Test:      j.test,
+				Index:     idx,
+				Err:       err,
+				Duration:  time.Since(start),
 			}
 		}(i, job)
 	}
 
 	wg.Wait()
 
+	// Calculate per-file durations (sum of test durations in that file)
+	fileDurations := make(map[int]time.Duration)
+	for _, result := range results {
+		fileDurations[result.FileIndex] += result.Duration
+	}
+
 	// Print results in order, grouped by file
 	currentFile := ""
+	currentFileIndex := -1
 	for i, job := range jobs {
 		if len(testFiles) > 1 && job.filePath != currentFile {
+			// Print previous file's duration
 			if currentFile != "" {
-				fmt.Println()
+				fmt.Printf("  %s\n\n", formatDuration(fileDurations[currentFileIndex]))
 			}
 			fmt.Printf("%s\n", job.filePath)
 			currentFile = job.filePath
+			currentFileIndex = job.fileIndex
 		}
 
 		result := results[i]
@@ -216,8 +247,15 @@ func runTestsParallel(testFiles []TestFile) (passed, failed int) {
 		}
 	}
 
-	fmt.Println()
-	return passed, failed
+	// Print last file's duration if multiple files
+	if len(testFiles) > 1 {
+		fmt.Printf("  %s\n\n", formatDuration(fileDurations[currentFileIndex]))
+	} else {
+		fmt.Println()
+	}
+
+	totalDuration = time.Since(suiteStart)
+	return passed, failed, totalDuration
 }
 
 // collectTestFiles gathers all test files from a file or directory path
