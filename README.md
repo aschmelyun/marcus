@@ -1,6 +1,8 @@
 # Marcus
 
-A markdown-based API testing tool. Define your API tests in readable markdown files and run them from the command line.
+Human-readable web and API testing from the power and simplicity of Markdown. Easy to use locally or as part of your CI/CD pipeline.
+
+🚧 This is an active-development WIP, breaking changes may occur 🚧
 
 ## Installation
 
