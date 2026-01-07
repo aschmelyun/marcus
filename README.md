@@ -51,7 +51,7 @@ POST https://api.example.com/users
   "name": "Alice",
   "email": "alice@example.com"
 }
-```
+`` `
 
 Assert:
 - Status is 201
@@ -71,7 +71,7 @@ POST https://api.example.com/login
 username=alice
 password=secret123
 remember_me=true
-```
+`` `
 
 Assert:
 - Status is 200
@@ -131,7 +131,7 @@ POST https://api.example.com/orders
 
 ```json
 FILE: payloads/order.json
-```
+`` `
 
 Assert:
 - Status is 201
@@ -217,7 +217,7 @@ POST /items
 {
   "name": "New Item"
 }
-```
+`` `
 
 Assert:
 - Status is 201
