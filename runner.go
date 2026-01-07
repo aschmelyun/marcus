@@ -107,10 +107,12 @@ func runTestsParallel(testFiles []TestFile) (passed, failed int, totalDuration t
 
 	wg.Wait()
 
-	// Calculate per-file durations (sum of test durations in that file)
+	// Calculate per-file durations (max test duration since they run in parallel)
 	fileDurations := make(map[int]time.Duration)
 	for _, result := range results {
-		fileDurations[result.FileIndex] += result.Duration
+		if result.Duration > fileDurations[result.FileIndex] {
+			fileDurations[result.FileIndex] = result.Duration
+		}
 	}
 
 	// Print results in order, grouped by file
