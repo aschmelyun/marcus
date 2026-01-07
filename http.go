@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -154,6 +155,29 @@ func validateAssertion(assertion Assertion, statusCode int, body []byte, jsonBod
 		}
 		if duration > maxDuration {
 			return fmt.Errorf("duration assertion failed: expected < %s, got %s", formatDuration(maxDuration), formatDuration(duration))
+		}
+
+	case "body_matches_file":
+		expectedContent, err := os.ReadFile(assertion.Value)
+		if err != nil {
+			return fmt.Errorf("body matches file assertion failed: could not read file '%s': %w", assertion.Value, err)
+		}
+		// Normalize JSON for comparison (re-marshal both to handle formatting differences)
+		var expectedJSON, actualJSON interface{}
+		if err := json.Unmarshal(expectedContent, &expectedJSON); err != nil {
+			// Not JSON, do exact string comparison
+			if string(body) != string(expectedContent) {
+				return fmt.Errorf("body matches file assertion failed: response does not match file '%s'", assertion.Value)
+			}
+		} else {
+			if err := json.Unmarshal(body, &actualJSON); err != nil {
+				return fmt.Errorf("body matches file assertion failed: response is not valid JSON")
+			}
+			expectedNorm, _ := json.Marshal(expectedJSON)
+			actualNorm, _ := json.Marshal(actualJSON)
+			if string(expectedNorm) != string(actualNorm) {
+				return fmt.Errorf("body matches file assertion failed: response does not match file '%s'", assertion.Value)
+			}
 		}
 	}
 

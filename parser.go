@@ -241,13 +241,14 @@ func parseTestBlock(name, content string, defaults Defaults, baseDir string) Tes
 	}
 
 	// Parse assertions
-	test.Assertions = parseAssertions(content)
+	test.Assertions = parseAssertions(content, baseDir)
 
 	return test
 }
 
 // parseAssertions extracts assertions from a test block
-func parseAssertions(content string) []Assertion {
+// baseDir is used for resolving relative file paths in FILE: references
+func parseAssertions(content string, baseDir string) []Assertion {
 	var assertions []Assertion
 
 	// Find the assertions section (starts with "Assert:" or "Asserts:")
@@ -310,6 +311,21 @@ func parseAssertions(content string) []Assertion {
 			assertions = append(assertions, Assertion{
 				Type:  "duration",
 				Value: matches[1],
+			})
+			continue
+		}
+
+		// Body matches file assertion: "Body matches file `path/to/file.json`"
+		bodyMatchesFilePattern := regexp.MustCompile("^Body matches file `([^`]+)`")
+		if matches := bodyMatchesFilePattern.FindStringSubmatch(line); matches != nil {
+			filePath := matches[1]
+			// Resolve relative path from test file's directory
+			if !filepath.IsAbs(filePath) {
+				filePath = filepath.Join(baseDir, filePath)
+			}
+			assertions = append(assertions, Assertion{
+				Type:  "body_matches_file",
+				Value: filePath,
 			})
 			continue
 		}
