@@ -197,18 +197,22 @@ func TestParseTestBlock(t *testing.T) {
 		blockName      string
 		content        string
 		defaults       Defaults
+		baseDir        string
 		expectedMethod string
 		expectedURL    string
 		expectedHeader map[string]string
+		expectedBody   string
 	}{
 		{
 			name:           "GET request",
 			blockName:      "Simple GET",
 			content:        "GET https://httpbin.org/get",
 			defaults:       defaults,
+			baseDir:        "",
 			expectedMethod: "GET",
 			expectedURL:    "https://httpbin.org/get",
 			expectedHeader: map[string]string{},
+			expectedBody:   "",
 		},
 		{
 			name:      "POST with headers",
@@ -217,12 +221,14 @@ func TestParseTestBlock(t *testing.T) {
 - Content-Type: application/json
 - Authorization: Bearer token`,
 			defaults:       defaults,
+			baseDir:        "",
 			expectedMethod: "POST",
 			expectedURL:    "https://httpbin.org/post",
 			expectedHeader: map[string]string{
 				"Content-Type":  "application/json",
 				"Authorization": "Bearer token",
 			},
+			expectedBody: "",
 		},
 		{
 			name:      "with default headers",
@@ -233,11 +239,13 @@ func TestParseTestBlock(t *testing.T) {
 					"Accept": "application/json",
 				},
 			},
+			baseDir:        "",
 			expectedMethod: "GET",
 			expectedURL:    "https://httpbin.org/get",
 			expectedHeader: map[string]string{
 				"Accept": "application/json",
 			},
+			expectedBody: "",
 		},
 		{
 			name:      "override default header",
@@ -249,11 +257,13 @@ func TestParseTestBlock(t *testing.T) {
 					"Accept": "application/json",
 				},
 			},
+			baseDir:        "",
 			expectedMethod: "GET",
 			expectedURL:    "https://httpbin.org/get",
 			expectedHeader: map[string]string{
 				"Accept": "text/plain",
 			},
+			expectedBody: "",
 		},
 		{
 			name:      "relative path with root",
@@ -263,9 +273,11 @@ func TestParseTestBlock(t *testing.T) {
 				Root:    "https://api.example.com",
 				Headers: map[string]string{},
 			},
+			baseDir:        "",
 			expectedMethod: "GET",
 			expectedURL:    "https://api.example.com/users",
 			expectedHeader: map[string]string{},
+			expectedBody:   "",
 		},
 		{
 			name:      "relative path with root containing path",
@@ -275,9 +287,11 @@ func TestParseTestBlock(t *testing.T) {
 				Root:    "https://api.example.com/v2",
 				Headers: map[string]string{},
 			},
+			baseDir:        "",
 			expectedMethod: "POST",
 			expectedURL:    "https://api.example.com/v2/users",
 			expectedHeader: map[string]string{},
+			expectedBody:   "",
 		},
 		{
 			name:      "absolute URL ignores root",
@@ -287,15 +301,28 @@ func TestParseTestBlock(t *testing.T) {
 				Root:    "https://api.example.com",
 				Headers: map[string]string{},
 			},
+			baseDir:        "",
 			expectedMethod: "GET",
 			expectedURL:    "https://other.com/path",
 			expectedHeader: map[string]string{},
+			expectedBody:   "",
+		},
+		{
+			name:      "FILE: payload reference",
+			blockName: "File Payload",
+			content: "POST https://httpbin.org/post\n\n```json\nFILE: payload.json\n```",
+			defaults:       defaults,
+			baseDir:        "testdata",
+			expectedMethod: "POST",
+			expectedURL:    "https://httpbin.org/post",
+			expectedHeader: map[string]string{},
+			expectedBody:   "{\"test\": \"data\"}\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := parseTestBlock(tt.blockName, tt.content, tt.defaults, "")
+			result := parseTestBlock(tt.blockName, tt.content, tt.defaults, tt.baseDir)
 
 			if result.Method != tt.expectedMethod {
 				t.Errorf("expected method %q, got %q", tt.expectedMethod, result.Method)
@@ -315,6 +342,10 @@ func TestParseTestBlock(t *testing.T) {
 				} else if gotVal != expectedVal {
 					t.Errorf("header %q: expected %q, got %q", key, expectedVal, gotVal)
 				}
+			}
+
+			if result.Body != tt.expectedBody {
+				t.Errorf("expected body %q, got %q", tt.expectedBody, result.Body)
 			}
 		})
 	}
@@ -379,7 +410,7 @@ func TestParseTestBlockRetryOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := parseTestBlock("Test", tt.content, defaults)
+			result := parseTestBlock("Test", tt.content, defaults, "")
 
 			if result.WaitForStatus != tt.expectedWaitFor {
 				t.Errorf("WaitForStatus: expected %d, got %d", tt.expectedWaitFor, result.WaitForStatus)
@@ -459,11 +490,19 @@ func TestParseAssertions(t *testing.T) {
 			content:  "GET https://example.com",
 			expected: []Assertion{},
 		},
+		{
+			name: "body matches file assertion",
+			content: `Asserts:
+- Body matches file ` + "`expected/response.json`",
+			expected: []Assertion{
+				{Type: "body_matches_file", Value: "expected/response.json"},
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := parseAssertions(tt.content)
+			result := parseAssertions(tt.content, "")
 
 			if len(result) != len(tt.expected) {
 				t.Errorf("expected %d assertions, got %d", len(tt.expected), len(result))
