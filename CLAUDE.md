@@ -10,7 +10,7 @@ Marcus is a markdown-based API testing tool written in Go. It parses markdown fi
 
 ```bash
 # Build the binary
-go build -o marcus main.go
+go build -o marcus .
 
 # Run tests against a markdown test file
 ./marcus tests/passing.md      # Expected to pass
@@ -25,8 +25,18 @@ Test files use a specific markdown structure:
 - `## Test Name` - Each test starts with an H2 header
 - `GET/POST/PUT/PATCH/DELETE https://url` - HTTP method and URL on a single line
 - `- Header-Name: value` - Headers as bullet points after the URL
-- ` ```json ` or ` ```form ` - Code blocks for request body
+- ` ```json ` or ` ```form ` - Code blocks for request body (inline or via `FILE:` reference)
 - `Assert:` or `Asserts:` - Assertion section with bullet points
+
+### External File Payloads
+
+For large payloads, use `FILE:` to reference an external file instead of inline content:
+
+```json
+FILE: payloads/user.json
+```
+
+Paths are relative to the test file's directory.
 
 ### Supported Assertions
 

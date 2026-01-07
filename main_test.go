@@ -174,7 +174,7 @@ GET https://httpbin.org/get`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := parseTests(tt.content)
+			result := parseTests(tt.content, "")
 
 			if len(result) != tt.expectedCount {
 				t.Errorf("expected %d tests, got %d", tt.expectedCount, len(result))
@@ -295,7 +295,7 @@ func TestParseTestBlock(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := parseTestBlock(tt.blockName, tt.content, tt.defaults)
+			result := parseTestBlock(tt.blockName, tt.content, tt.defaults, "")
 
 			if result.Method != tt.expectedMethod {
 				t.Errorf("expected method %q, got %q", tt.expectedMethod, result.Method)
