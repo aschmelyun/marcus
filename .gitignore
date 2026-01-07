@@ -1,0 +1,18 @@
+# Binary
+marcus
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Go coverage
+*.out
+
+# Misc
+.DS_Store
