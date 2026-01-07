@@ -41,6 +41,11 @@ type TestFile struct {
 	Tests []Test
 }
 
+// Defaults holds default settings parsed from frontmatter
+type Defaults struct {
+	Headers map[string]string
+}
+
 // TestResult holds the outcome of a single test execution
 type TestResult struct {
 	FilePath  string
@@ -311,6 +316,9 @@ func collectTestFiles(path string) ([]TestFile, error) {
 func parseTests(content string) []Test {
 	var tests []Test
 
+	// Parse frontmatter for defaults
+	defaults, content := parseFrontmatter(content)
+
 	// Split by ## headers to get individual test blocks
 	testPattern := regexp.MustCompile(`(?m)^## (.+)$`)
 	matches := testPattern.FindAllStringSubmatchIndex(content, -1)
@@ -327,7 +335,7 @@ func parseTests(content string) []Test {
 		}
 		blockContent := content[blockStart:blockEnd]
 
-		test := parseTestBlock(testName, blockContent)
+		test := parseTestBlock(testName, blockContent, defaults)
 		if test.URL != "" {
 			tests = append(tests, test)
 		}
@@ -336,12 +344,87 @@ func parseTests(content string) []Test {
 	return tests
 }
 
+// parseFrontmatter extracts YAML frontmatter from content
+func parseFrontmatter(content string) (Defaults, string) {
+	defaults := Defaults{
+		Headers: make(map[string]string),
+	}
+
+	// Check if content starts with frontmatter delimiter
+	if !strings.HasPrefix(strings.TrimSpace(content), "---") {
+		return defaults, content
+	}
+
+	// Find the closing delimiter
+	content = strings.TrimSpace(content)
+	lines := strings.Split(content, "\n")
+
+	if len(lines) < 2 || strings.TrimSpace(lines[0]) != "---" {
+		return defaults, content
+	}
+
+	// Find closing ---
+	endIdx := -1
+	for i := 1; i < len(lines); i++ {
+		if strings.TrimSpace(lines[i]) == "---" {
+			endIdx = i
+			break
+		}
+	}
+
+	if endIdx == -1 {
+		return defaults, content
+	}
+
+	// Parse the frontmatter content
+	inHeaders := false
+	for i := 1; i < endIdx; i++ {
+		line := lines[i]
+		trimmed := strings.TrimSpace(line)
+
+		if trimmed == "" {
+			continue
+		}
+
+		// Check for "headers:" section
+		if trimmed == "headers:" {
+			inHeaders = true
+			continue
+		}
+
+		// Parse header entries (indented lines under headers:)
+		if inHeaders && (strings.HasPrefix(line, "  ") || strings.HasPrefix(line, "\t")) {
+			parts := strings.SplitN(trimmed, ":", 2)
+			if len(parts) == 2 {
+				key := strings.TrimSpace(parts[0])
+				value := strings.TrimSpace(parts[1])
+				defaults.Headers[key] = value
+			}
+		} else {
+			// No longer in headers section
+			inHeaders = false
+		}
+	}
+
+	// Return remaining content after frontmatter
+	remaining := strings.Join(lines[endIdx+1:], "\n")
+	return defaults, remaining
+}
+
 // parseTestBlock parses a single test block
-func parseTestBlock(name, content string) Test {
+func parseTestBlock(name, content string, defaults Defaults) Test {
 	test := Test{
 		Name:    name,
 		Method:  "GET",
 		Headers: make(map[string]string),
+	}
+
+	// Apply default headers first
+	for key, value := range defaults.Headers {
+		test.Headers[key] = value
+		if strings.EqualFold(key, "Content-Type") {
+			test.ContentType = value
+		}
 	}
 
 	lines := strings.Split(content, "\n")
@@ -364,6 +447,7 @@ func parseTestBlock(name, content string) Test {
 	}
 
 	// Parse headers (bullet points starting with "- " right after the URL line)
+	// These override any defaults
 	headerPattern := regexp.MustCompile(`^-\s+([^:]+):\s*(.+)$`)
 	for i := methodLineIdx + 1; i < len(lines); i++ {
 		line := lines[i]
