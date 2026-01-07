@@ -169,7 +169,8 @@ func collectTestFiles(path string) ([]TestFile, error) {
 				if err != nil {
 					return err
 				}
-				tests := parseTests(string(content))
+				baseDir := filepath.Dir(p)
+				tests := parseTests(string(content), baseDir)
 				if len(tests) > 0 {
 					testFiles = append(testFiles, TestFile{Path: p, Tests: tests})
 				}
@@ -189,7 +190,8 @@ func collectTestFiles(path string) ([]TestFile, error) {
 		if err != nil {
 			return nil, err
 		}
-		tests := parseTests(string(content))
+		baseDir := filepath.Dir(path)
+		tests := parseTests(string(content), baseDir)
 		if len(tests) > 0 {
 			testFiles = append(testFiles, TestFile{Path: path, Tests: tests})
 		}

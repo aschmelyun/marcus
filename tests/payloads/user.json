@@ -1,0 +1,10 @@
+{
+  "username": "external_file_user",
+  "email": "external@example.com",
+  "password": "securePassword456",
+  "profile": {
+    "firstName": "External",
+    "lastName": "User",
+    "role": "tester"
+  }
+}

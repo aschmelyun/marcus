@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -8,7 +10,8 @@ import (
 )
 
 // parseTests extracts all tests from markdown content
-func parseTests(content string) []Test {
+// baseDir is the directory containing the test file, used for resolving relative file paths
+func parseTests(content string, baseDir string) []Test {
 	var tests []Test
 
 	// Parse frontmatter for defaults
@@ -30,7 +33,7 @@ func parseTests(content string) []Test {
 		}
 		blockContent := content[blockStart:blockEnd]
 
-		test := parseTestBlock(testName, blockContent, defaults)
+		test := parseTestBlock(testName, blockContent, defaults, baseDir)
 		if test.URL != "" {
 			tests = append(tests, test)
 		}
@@ -116,7 +119,8 @@ func parseFrontmatter(content string) (Defaults, string) {
 }
 
 // parseTestBlock parses a single test block
-func parseTestBlock(name, content string, defaults Defaults) Test {
+// baseDir is used for resolving relative file paths in FILE: references
+func parseTestBlock(name, content string, defaults Defaults, baseDir string) Test {
 	test := Test{
 		Name:    name,
 		Method:  "GET",
@@ -208,6 +212,20 @@ func parseTestBlock(name, content string, defaults Defaults) Test {
 	if matches := codeBlockPattern.FindStringSubmatch(content); matches != nil {
 		blockType := matches[1]
 		blockContent := strings.TrimSpace(matches[2])
+
+		// Check if content is a file reference
+		if strings.HasPrefix(blockContent, "FILE:") {
+			filePath := strings.TrimSpace(strings.TrimPrefix(blockContent, "FILE:"))
+			// Resolve relative path from test file's directory
+			if !filepath.IsAbs(filePath) {
+				filePath = filepath.Join(baseDir, filePath)
+			}
+			fileContent, err := os.ReadFile(filePath)
+			if err == nil {
+				blockContent = string(fileContent)
+			}
+			// If file can't be read, keep the FILE: reference as-is (will fail at runtime)
+		}
 
 		if blockType == "json" {
 			test.Body = blockContent
