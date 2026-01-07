@@ -43,6 +43,7 @@ Paths are relative to the test file's directory.
 - `Status is <code>` - HTTP status code check
 - `Body contains \`field\`` - Checks for field presence in JSON response
 - `Field \`path.to.field\` equals \`value\`` - Checks field value (supports dot notation for nested fields)
+- `Body matches file \`path/to/file.json\`` - Compares entire response body against external file (JSON is normalized before comparison)
 
 ## Architecture
 
