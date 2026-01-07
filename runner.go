@@ -11,6 +11,16 @@ import (
 	"time"
 )
 
+// ANSI color codes
+const (
+	colorReset  = "\033[0m"
+	colorRed    = "\033[31m"
+	colorGreen  = "\033[32m"
+	colorYellow = "\033[33m"
+	colorDim    = "\033[2m"
+	colorBold   = "\033[1m"
+)
+
 // formatDuration formats a duration in a human-readable way
 func formatDuration(d time.Duration) string {
 	if d < time.Second {
@@ -32,18 +42,18 @@ func runTestsSequential(testFiles []TestFile) (passed, failed int, totalDuration
 
 		for _, test := range tf.Tests {
 			if err := runTest(test); err != nil {
-				fmt.Printf("  ✗ %s\n", test.Name)
-				fmt.Printf("    → %v\n", err)
+				fmt.Printf("  %s✗%s %s\n", colorRed, colorReset, test.Name)
+				fmt.Printf("    %s→ %v%s\n", colorRed, err, colorReset)
 				failed++
 			} else {
-				fmt.Printf("  ✓ %s\n", test.Name)
+				fmt.Printf("  %s✓%s %s\n", colorGreen, colorReset, test.Name)
 				passed++
 			}
 		}
 
 		fileDuration := time.Since(fileStart)
 		if len(testFiles) > 1 {
-			fmt.Printf("  %s\n\n", formatDuration(fileDuration))
+			fmt.Printf("  %s%s%s\n\n", colorDim, formatDuration(fileDuration), colorReset)
 		}
 	}
 
@@ -122,7 +132,7 @@ func runTestsParallel(testFiles []TestFile) (passed, failed int, totalDuration t
 		if len(testFiles) > 1 && job.filePath != currentFile {
 			// Print previous file's duration
 			if currentFile != "" {
-				fmt.Printf("  %s\n\n", formatDuration(fileDurations[currentFileIndex]))
+				fmt.Printf("  %s%s%s\n\n", colorDim, formatDuration(fileDurations[currentFileIndex]), colorReset)
 			}
 			fmt.Printf("%s\n", job.filePath)
 			currentFile = job.filePath
@@ -131,18 +141,18 @@ func runTestsParallel(testFiles []TestFile) (passed, failed int, totalDuration t
 
 		result := results[i]
 		if result.Err != nil {
-			fmt.Printf("  ✗ %s\n", result.Test.Name)
-			fmt.Printf("    → %v\n", result.Err)
+			fmt.Printf("  %s✗%s %s\n", colorRed, colorReset, result.Test.Name)
+			fmt.Printf("    %s→ %v%s\n", colorRed, result.Err, colorReset)
 			failed++
 		} else {
-			fmt.Printf("  ✓ %s\n", result.Test.Name)
+			fmt.Printf("  %s✓%s %s\n", colorGreen, colorReset, result.Test.Name)
 			passed++
 		}
 	}
 
 	// Print last file's duration if multiple files
 	if len(testFiles) > 1 {
-		fmt.Printf("  %s\n\n", formatDuration(fileDurations[currentFileIndex]))
+		fmt.Printf("  %s%s%s\n\n", colorDim, formatDuration(fileDurations[currentFileIndex]), colorReset)
 	} else {
 		fmt.Println()
 	}

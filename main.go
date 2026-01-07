@@ -68,9 +68,9 @@ func main() {
 	}
 
 	if failed == 0 {
-		fmt.Printf("%d passed in %s\n", passed, formatDuration(totalDuration))
+		fmt.Printf("%s%d passed%s %sin %s%s\n", colorGreen, passed, colorReset, colorDim, formatDuration(totalDuration), colorReset)
 	} else {
-		fmt.Printf("%d passed, %d failed in %s\n", passed, failed, formatDuration(totalDuration))
+		fmt.Printf("%s%d passed%s, %s%d failed%s %sin %s%s\n", colorGreen, passed, colorReset, colorRed, failed, colorReset, colorDim, formatDuration(totalDuration), colorReset)
 		os.Exit(1)
 	}
 }
