@@ -39,7 +39,7 @@ Assert:
 
 ### POST with JSON Body
 
-```markdown
+````markdown
 ## Create a user
 
 POST https://api.example.com/users
@@ -51,17 +51,17 @@ POST https://api.example.com/users
   "name": "Alice",
   "email": "alice@example.com"
 }
-`` `
+```
 
 Assert:
 - Status is 201
 - Field `id` equals `1`
 - Field `name` equals `"Alice"`
-```
+````
 
 ### POST with Form Data
 
-```markdown
+````markdown
 ## Login with credentials
 
 POST https://api.example.com/login
@@ -71,12 +71,12 @@ POST https://api.example.com/login
 username=alice
 password=secret123
 remember_me=true
-`` `
+```
 
 Assert:
 - Status is 200
 - Body contains `token`
-```
+````
 
 ## Assertions
 
@@ -123,7 +123,7 @@ JSON responses are normalized before comparison, so formatting differences are i
 
 For large request bodies, reference an external file instead of inline content:
 
-```markdown
+````markdown
 ## Create order with large payload
 
 POST https://api.example.com/orders
@@ -131,11 +131,11 @@ POST https://api.example.com/orders
 
 ```json
 FILE: payloads/order.json
-`` `
+```
 
 Assert:
 - Status is 201
-```
+````
 
 File paths are relative to the test file's directory.
 
@@ -192,7 +192,7 @@ Individual tests can override default headers by specifying them explicitly.
 
 ### Combined Example
 
-```markdown
+````markdown
 ---
 root: https://api.example.com/v1
 headers:
@@ -217,11 +217,11 @@ POST /items
 {
   "name": "New Item"
 }
-`` `
+```
 
 Assert:
 - Status is 201
-```
+````
 
 ## Retry and Polling
 
