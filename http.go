@@ -13,14 +13,20 @@ import (
 
 // runTest executes a single test and validates its assertions
 func runTest(test Test) error {
-	var req *http.Request
-	var err error
+	// Apply retry defaults
+	retryDelay := test.RetryDelay
+	if retryDelay == 0 {
+		retryDelay = 1 * time.Second
+	}
+	retryMax := test.RetryMax
+	if retryMax == 0 {
+		retryMax = 10
+	}
 
-	// Prepare the request body
-	var bodyReader io.Reader
+	// Prepare the request body content (needed for potential retries)
+	var bodyContent string
 	if test.Body != "" {
 		if test.ContentType == "application/x-www-form-urlencoded" {
-			// Convert form body to URL-encoded format
 			formData := url.Values{}
 			for _, line := range strings.Split(test.Body, "\n") {
 				line = strings.TrimSpace(line)
@@ -32,53 +38,77 @@ func runTest(test Test) error {
 					formData.Set(parts[0], parts[1])
 				}
 			}
-			bodyReader = strings.NewReader(formData.Encode())
+			bodyContent = formData.Encode()
 		} else {
-			bodyReader = strings.NewReader(test.Body)
+			bodyContent = test.Body
 		}
 	}
 
-	req, err = http.NewRequest(test.Method, test.URL, bodyReader)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Set headers
-	for key, value := range test.Headers {
-		req.Header.Set(key, value)
-	}
-	if test.ContentType != "" {
-		req.Header.Set("Content-Type", test.ContentType)
-	}
-
-	// Execute request and measure duration
 	client := &http.Client{}
-	start := time.Now()
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
+	var lastStatusCode int
+	var attempt int
 
-	// Read response body
-	respBody, err := io.ReadAll(resp.Body)
-	duration := time.Since(start)
-	if err != nil {
-		return fmt.Errorf("failed to read response: %w", err)
-	}
+	for {
+		attempt++
 
-	// Parse response as JSON for field assertions
-	var respJSON map[string]interface{}
-	json.Unmarshal(respBody, &respJSON) // Ignore error - might not be JSON
-
-	// Validate assertions
-	for _, assertion := range test.Assertions {
-		if err := validateAssertion(assertion, resp.StatusCode, respBody, respJSON, duration); err != nil {
-			return err
+		// Create fresh request for each attempt
+		var bodyReader io.Reader
+		if bodyContent != "" {
+			bodyReader = strings.NewReader(bodyContent)
 		}
-	}
 
-	return nil
+		req, err := http.NewRequest(test.Method, test.URL, bodyReader)
+		if err != nil {
+			return fmt.Errorf("failed to create request: %w", err)
+		}
+
+		// Set headers
+		for key, value := range test.Headers {
+			req.Header.Set(key, value)
+		}
+		if test.ContentType != "" {
+			req.Header.Set("Content-Type", test.ContentType)
+		}
+
+		// Execute request and measure duration
+		start := time.Now()
+		resp, err := client.Do(req)
+		if err != nil {
+			return fmt.Errorf("request failed: %w", err)
+		}
+
+		// Read response body
+		respBody, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		duration := time.Since(start)
+		if err != nil {
+			return fmt.Errorf("failed to read response: %w", err)
+		}
+
+		lastStatusCode = resp.StatusCode
+
+		// If waiting for a specific status and we haven't got it yet
+		if test.WaitForStatus != 0 && resp.StatusCode != test.WaitForStatus {
+			if attempt >= retryMax {
+				return fmt.Errorf("wait for status %d failed: got %d after %d attempts", test.WaitForStatus, lastStatusCode, attempt)
+			}
+			time.Sleep(retryDelay)
+			continue
+		}
+
+		// Parse response as JSON for field assertions
+		var respJSON map[string]interface{}
+		json.Unmarshal(respBody, &respJSON) // Ignore error - might not be JSON
+
+		// Validate assertions
+		for _, assertion := range test.Assertions {
+			if err := validateAssertion(assertion, resp.StatusCode, respBody, respJSON, duration); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
 }
 
 // validateAssertion checks a single assertion against the response

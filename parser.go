@@ -2,7 +2,9 @@ package main
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // parseTests extracts all tests from markdown content
@@ -163,7 +165,7 @@ func parseTestBlock(name, content string, defaults Defaults) Test {
 		return test
 	}
 
-	// Parse headers (bullet points starting with "- " right after the URL line)
+	// Parse headers and retry options (bullet points starting with "- " right after the URL line)
 	// These override any defaults
 	headerPattern := regexp.MustCompile(`^-\s+([^:]+):\s*(.+)$`)
 	for i := methodLineIdx + 1; i < len(lines); i++ {
@@ -172,11 +174,29 @@ func parseTestBlock(name, content string, defaults Defaults) Test {
 			continue
 		}
 		if matches := headerPattern.FindStringSubmatch(line); matches != nil {
-			headerName := strings.TrimSpace(matches[1])
-			headerValue := strings.TrimSpace(matches[2])
-			test.Headers[headerName] = headerValue
-			if strings.EqualFold(headerName, "Content-Type") {
-				test.ContentType = headerValue
+			optionName := strings.TrimSpace(matches[1])
+			optionValue := strings.TrimSpace(matches[2])
+
+			// Check for retry/wait options (case-insensitive)
+			switch strings.ToLower(optionName) {
+			case "wait for status":
+				if status, err := strconv.Atoi(optionValue); err == nil {
+					test.WaitForStatus = status
+				}
+			case "retry-delay":
+				if d, err := time.ParseDuration(optionValue); err == nil {
+					test.RetryDelay = d
+				}
+			case "retry-max":
+				if max, err := strconv.Atoi(optionValue); err == nil {
+					test.RetryMax = max
+				}
+			default:
+				// It's a regular HTTP header
+				test.Headers[optionName] = optionValue
+				if strings.EqualFold(optionName, "Content-Type") {
+					test.ContentType = optionValue
+				}
 			}
 		} else {
 			break // Stop at first non-header line
