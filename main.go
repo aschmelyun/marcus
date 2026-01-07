@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -30,50 +32,133 @@ type Assertion struct {
 	Value string // expected value
 }
 
+// TestFile represents a markdown file containing tests
+type TestFile struct {
+	Path  string
+	Tests []Test
+}
+
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "Usage: marcus <markdown-file>")
+		fmt.Fprintln(os.Stderr, "Usage: marcus <file-or-directory>")
 		os.Exit(1)
 	}
 
-	filename := os.Args[1]
+	target := os.Args[1]
 
-	content, err := os.ReadFile(filename)
+	testFiles, err := collectTestFiles(target)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	tests := parseTests(string(content))
-
-	if len(tests) == 0 {
-		fmt.Println("No tests found in the markdown file.")
+	if len(testFiles) == 0 {
+		fmt.Println("No test files found.")
 		return
 	}
 
-	fmt.Printf("%s (%d tests)\n\n", filename, len(tests))
+	// Count total tests across all files
+	totalTests := 0
+	for _, tf := range testFiles {
+		totalTests += len(tf.Tests)
+	}
+
+	if totalTests == 0 {
+		fmt.Println("No tests found.")
+		return
+	}
+
+	// Print summary header
+	if len(testFiles) == 1 {
+		fmt.Printf("%s (%d tests)\n\n", testFiles[0].Path, totalTests)
+	} else {
+		fmt.Printf("%s (%d files, %d tests)\n\n", target, len(testFiles), totalTests)
+	}
 
 	passed := 0
 	failed := 0
 
-	for _, test := range tests {
-		if err := runTest(test); err != nil {
-			fmt.Printf("  ✗ %s\n", test.Name)
-			fmt.Printf("    → %v\n", err)
-			failed++
-		} else {
-			fmt.Printf("  ✓ %s\n", test.Name)
-			passed++
+	for _, tf := range testFiles {
+		// For multiple files, print the file header
+		if len(testFiles) > 1 {
+			fmt.Printf("%s\n", tf.Path)
+		}
+
+		for _, test := range tf.Tests {
+			if err := runTest(test); err != nil {
+				fmt.Printf("  ✗ %s\n", test.Name)
+				fmt.Printf("    → %v\n", err)
+				failed++
+			} else {
+				fmt.Printf("  ✓ %s\n", test.Name)
+				passed++
+			}
+		}
+
+		if len(testFiles) > 1 {
+			fmt.Println()
 		}
 	}
 
-	fmt.Println()
+	if len(testFiles) == 1 {
+		fmt.Println()
+	}
+
 	if failed == 0 {
 		fmt.Printf("%d passed\n", passed)
 	} else {
 		fmt.Printf("%d passed, %d failed\n", passed, failed)
 		os.Exit(1)
 	}
+}
+
+// collectTestFiles gathers all test files from a file or directory path
+func collectTestFiles(path string) ([]TestFile, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var testFiles []TestFile
+
+	if info.IsDir() {
+		// Walk directory recursively for .md files
+		err := filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if !info.IsDir() && strings.HasSuffix(p, ".md") {
+				content, err := os.ReadFile(p)
+				if err != nil {
+					return err
+				}
+				tests := parseTests(string(content))
+				if len(tests) > 0 {
+					testFiles = append(testFiles, TestFile{Path: p, Tests: tests})
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		// Sort by path for consistent ordering
+		sort.Slice(testFiles, func(i, j int) bool {
+			return testFiles[i].Path < testFiles[j].Path
+		})
+	} else {
+		// Single file
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		tests := parseTests(string(content))
+		if len(tests) > 0 {
+			testFiles = append(testFiles, TestFile{Path: path, Tests: tests})
+		}
+	}
+
+	return testFiles, nil
 }
 
 // parseTests extracts all tests from markdown content
