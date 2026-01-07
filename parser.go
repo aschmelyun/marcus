@@ -241,6 +241,16 @@ func parseAssertions(content string) []Assertion {
 			})
 			continue
 		}
+
+		// Duration assertion: "Duration < 500ms" or "Time < 2s"
+		durationPattern := regexp.MustCompile("^(?:Duration|Time) < (.+)$")
+		if matches := durationPattern.FindStringSubmatch(line); matches != nil {
+			assertions = append(assertions, Assertion{
+				Type:  "duration",
+				Value: matches[1],
+			})
+			continue
+		}
 	}
 
 	return assertions

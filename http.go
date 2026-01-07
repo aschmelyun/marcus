@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // runTest executes a single test and validates its assertions
@@ -50,8 +51,9 @@ func runTest(test Test) error {
 		req.Header.Set("Content-Type", test.ContentType)
 	}
 
-	// Execute request
+	// Execute request and measure duration
 	client := &http.Client{}
+	start := time.Now()
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
@@ -60,6 +62,7 @@ func runTest(test Test) error {
 
 	// Read response body
 	respBody, err := io.ReadAll(resp.Body)
+	duration := time.Since(start)
 	if err != nil {
 		return fmt.Errorf("failed to read response: %w", err)
 	}
@@ -70,7 +73,7 @@ func runTest(test Test) error {
 
 	// Validate assertions
 	for _, assertion := range test.Assertions {
-		if err := validateAssertion(assertion, resp.StatusCode, respBody, respJSON); err != nil {
+		if err := validateAssertion(assertion, resp.StatusCode, respBody, respJSON, duration); err != nil {
 			return err
 		}
 	}
@@ -79,7 +82,7 @@ func runTest(test Test) error {
 }
 
 // validateAssertion checks a single assertion against the response
-func validateAssertion(assertion Assertion, statusCode int, body []byte, jsonBody map[string]interface{}) error {
+func validateAssertion(assertion Assertion, statusCode int, body []byte, jsonBody map[string]interface{}, duration time.Duration) error {
 	switch assertion.Type {
 	case "status":
 		expected, err := strconv.Atoi(assertion.Value)
@@ -113,9 +116,24 @@ func validateAssertion(assertion Assertion, statusCode int, body []byte, jsonBod
 		if !valuesEqual(actual, expected) {
 			return fmt.Errorf("field equals assertion failed: field '%s' expected %v, got %v", assertion.Field, expected, actual)
 		}
+
+	case "duration":
+		maxDuration, err := parseDuration(assertion.Value)
+		if err != nil {
+			return fmt.Errorf("invalid duration in assertion: %s", assertion.Value)
+		}
+		if duration > maxDuration {
+			return fmt.Errorf("duration assertion failed: expected < %s, got %s", formatDuration(maxDuration), formatDuration(duration))
+		}
 	}
 
 	return nil
+}
+
+// parseDuration parses a duration string like "500ms" or "2s"
+func parseDuration(s string) (time.Duration, error) {
+	s = strings.TrimSpace(s)
+	return time.ParseDuration(s)
 }
 
 // getJSONField retrieves a nested field from JSON using dot notation

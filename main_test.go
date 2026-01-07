@@ -285,6 +285,22 @@ func TestParseAssertions(t *testing.T) {
 			},
 		},
 		{
+			name: "duration assertion with ms",
+			content: `Asserts:
+- Duration < 500ms`,
+			expected: []Assertion{
+				{Type: "duration", Value: "500ms"},
+			},
+		},
+		{
+			name: "duration assertion with seconds",
+			content: `Asserts:
+- Time < 2s`,
+			expected: []Assertion{
+				{Type: "duration", Value: "2s"},
+			},
+		},
+		{
 			name:     "no assertions section",
 			content:  "GET https://example.com",
 			expected: []Assertion{},
@@ -453,6 +469,44 @@ func TestFormatDuration(t *testing.T) {
 			result := formatDuration(time.Duration(tt.ms) * time.Millisecond)
 			if result != tt.expected {
 				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestParseDuration(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       string
+		expectedMs  int64
+		expectError bool
+	}{
+		{name: "milliseconds", input: "500ms", expectedMs: 500},
+		{name: "seconds", input: "2s", expectedMs: 2000},
+		{name: "seconds with decimal", input: "1.5s", expectedMs: 1500},
+		{name: "with whitespace", input: " 100ms ", expectedMs: 100},
+		{name: "invalid", input: "abc", expectError: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := parseDuration(tt.input)
+
+			if tt.expectError {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+
+			expectedDuration := time.Duration(tt.expectedMs) * time.Millisecond
+			if result != expectedDuration {
+				t.Errorf("expected %v, got %v", expectedDuration, result)
 			}
 		})
 	}
