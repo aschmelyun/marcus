@@ -11,12 +11,12 @@ import (
 	"time"
 )
 
-// ANSI color codes
+// ANSI color codes (muted/pastel palette)
 const (
 	colorReset  = "\033[0m"
-	colorRed    = "\033[31m"
-	colorGreen  = "\033[32m"
-	colorYellow = "\033[33m"
+	colorRed    = "\033[38;5;174m" // dusty rose
+	colorGreen  = "\033[38;5;114m" // soft sage
+	colorYellow = "\033[38;5;180m" // muted gold
 	colorDim    = "\033[2m"
 	colorBold   = "\033[1m"
 )
