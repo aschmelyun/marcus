@@ -14,7 +14,7 @@ Asserts:
 - Status is 200
 - Field `headers.Accept` equals `application/json`
 - Field `headers.X-Custom-Header` equals `test-value`
-- Duration < 5s
+- Duration less than 5s
 
 ## Test 2: Override a default header
 
