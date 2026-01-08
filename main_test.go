@@ -471,7 +471,7 @@ func TestParseAssertions(t *testing.T) {
 		{
 			name: "duration assertion with ms",
 			content: `Asserts:
-- Duration < 500ms`,
+- Duration less than 500ms`,
 			expected: []Assertion{
 				{Type: "duration", Value: "500ms"},
 			},
@@ -479,7 +479,7 @@ func TestParseAssertions(t *testing.T) {
 		{
 			name: "duration assertion with seconds",
 			content: `Asserts:
-- Time < 2s`,
+- Time less than 2s`,
 			expected: []Assertion{
 				{Type: "duration", Value: "2s"},
 			},
