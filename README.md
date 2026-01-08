@@ -90,7 +90,7 @@ Assertions are listed under `Assert:` or `Asserts:` as bullet points.
 | `Body contains \`field\`` | Check that a top-level field exists in JSON response |
 | `Field \`path\` equals \`value\`` | Check field value using dot notation for nested fields |
 | `Body matches file \`path\`` | Compare entire response body against an external file |
-| `Duration < <time>` | Check response time (e.g., `500ms`, `2s`) |
+| `Duration less than <time>` | Check response time (e.g., `500ms`, `2s`) |
 
 ### Field Path Examples
 
