@@ -269,8 +269,8 @@ func parseAssertions(content string, baseDir string) []Assertion {
 
 	// Parse each assertion line
 	lines := strings.Split(assertContent, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
+	for i := 0; i < len(lines); i++ {
+		line := strings.TrimSpace(lines[i])
 		if line == "" {
 			continue
 		}
@@ -333,6 +333,49 @@ func parseAssertions(content string, baseDir string) []Assertion {
 				Type:  "body_matches_file",
 				Value: filePath,
 			})
+			continue
+		}
+
+		// Body partially matches assertion: "Body partially matches:"
+		// Followed by a code block where lines starting with >> are checked
+		if line == "Body partially matches:" {
+			// Look for the code block in the remaining content
+			remainingContent := strings.Join(lines[i+1:], "\n")
+			codeBlockPattern := regexp.MustCompile("(?s)^\\s*```(?:json)?\\s*\n(.+?)```")
+			if matches := codeBlockPattern.FindStringSubmatch(remainingContent); matches != nil {
+				blockContent := matches[1]
+				// Extract lines marked with >> prefix
+				var markedLines []string
+				for _, blockLine := range strings.Split(blockContent, "\n") {
+					trimmed := strings.TrimSpace(blockLine)
+					if strings.HasPrefix(trimmed, ">>") {
+						// Remove the >> prefix and any leading whitespace after it
+						markedLine := strings.TrimSpace(strings.TrimPrefix(trimmed, ">>"))
+						if markedLine != "" {
+							markedLines = append(markedLines, markedLine)
+						}
+					}
+				}
+				if len(markedLines) > 0 {
+					assertions = append(assertions, Assertion{
+						Type:  "body_partial_match",
+						Value: strings.Join(markedLines, "\n"),
+					})
+				}
+				// Skip past the code block
+				for j := i + 1; j < len(lines); j++ {
+					if strings.Contains(lines[j], "```") {
+						// Found opening, now find closing
+						for k := j + 1; k < len(lines); k++ {
+							if strings.Contains(lines[k], "```") {
+								i = k
+								break
+							}
+						}
+						break
+					}
+				}
+			}
 			continue
 		}
 	}

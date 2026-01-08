@@ -179,6 +179,40 @@ func validateAssertion(assertion Assertion, statusCode int, body []byte, jsonBod
 				return fmt.Errorf("body matches file assertion failed: response does not match file '%s'", assertion.Value)
 			}
 		}
+
+	case "body_partial_match":
+		if jsonBody == nil {
+			return fmt.Errorf("body partial match assertion failed: response is not valid JSON")
+		}
+		// Each line in Value is a JSON key-value pair to check
+		// Format: "field": value  or  "field": "value"
+		for _, line := range strings.Split(assertion.Value, "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			// Remove trailing comma if present
+			line = strings.TrimSuffix(line, ",")
+
+			// Parse the line as a JSON key-value pair
+			// Try wrapping in braces to parse as JSON object
+			jsonLine := "{" + line + "}"
+			var parsed map[string]interface{}
+			if err := json.Unmarshal([]byte(jsonLine), &parsed); err != nil {
+				return fmt.Errorf("body partial match assertion failed: invalid JSON line '%s': %w", line, err)
+			}
+
+			// Check each field in the parsed line against the response
+			for field, expected := range parsed {
+				actual, err := getJSONField(jsonBody, field)
+				if err != nil {
+					return fmt.Errorf("body partial match assertion failed: %w", err)
+				}
+				if !valuesEqual(actual, expected) {
+					return fmt.Errorf("body partial match assertion failed: field '%s' expected %v, got %v", field, expected, actual)
+				}
+			}
+		}
 	}
 
 	return nil
