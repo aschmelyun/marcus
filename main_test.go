@@ -736,3 +736,127 @@ func TestParseDuration(t *testing.T) {
 		})
 	}
 }
+
+func TestParseSaveFields(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		expected []SaveField
+	}{
+		{
+			name: "single save field",
+			content: "Save:\n- Field `json.id` as `user_id`",
+			expected: []SaveField{
+				{Field: "json.id", Variable: "user_id"},
+			},
+		},
+		{
+			name: "multiple save fields",
+			content: "Save:\n- Field `data.id` as `id`\n- Field `data.token` as `auth_token`",
+			expected: []SaveField{
+				{Field: "data.id", Variable: "id"},
+				{Field: "data.token", Variable: "auth_token"},
+			},
+		},
+		{
+			name: "saves plural section",
+			content: "Saves:\n- Field `response.key` as `api_key`",
+			expected: []SaveField{
+				{Field: "response.key", Variable: "api_key"},
+			},
+		},
+		{
+			name:     "no save section",
+			content:  "Asserts:\n- Status is 200",
+			expected: []SaveField{},
+		},
+		{
+			name: "nested field path",
+			content: "Save:\n- Field `data.user.profile.id` as `profile_id`",
+			expected: []SaveField{
+				{Field: "data.user.profile.id", Variable: "profile_id"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parseSaveFields(tt.content)
+
+			if len(result) != len(tt.expected) {
+				t.Errorf("expected %d save fields, got %d", len(tt.expected), len(result))
+				return
+			}
+
+			for i, exp := range tt.expected {
+				if result[i].Field != exp.Field {
+					t.Errorf("save field %d: expected field %q, got %q", i, exp.Field, result[i].Field)
+				}
+				if result[i].Variable != exp.Variable {
+					t.Errorf("save field %d: expected variable %q, got %q", i, exp.Variable, result[i].Variable)
+				}
+			}
+		})
+	}
+}
+
+func TestInterpolateVariables(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		vars     map[string]interface{}
+		expected string
+	}{
+		{
+			name:     "single variable",
+			input:    "https://api.example.com/users/{{user_id}}",
+			vars:     map[string]interface{}{"user_id": "123"},
+			expected: "https://api.example.com/users/123",
+		},
+		{
+			name:     "multiple variables",
+			input:    "{{base_url}}/users/{{user_id}}/posts/{{post_id}}",
+			vars:     map[string]interface{}{"base_url": "https://api.example.com", "user_id": "42", "post_id": "99"},
+			expected: "https://api.example.com/users/42/posts/99",
+		},
+		{
+			name:     "no variables",
+			input:    "https://api.example.com/users",
+			vars:     map[string]interface{}{"unused": "value"},
+			expected: "https://api.example.com/users",
+		},
+		{
+			name:     "nil vars map",
+			input:    "https://api.example.com/{{id}}",
+			vars:     nil,
+			expected: "https://api.example.com/{{id}}",
+		},
+		{
+			name:     "numeric variable",
+			input:    "ID is {{id}}",
+			vars:     map[string]interface{}{"id": 42},
+			expected: "ID is 42",
+		},
+		{
+			name:     "variable in header value",
+			input:    "Bearer {{token}}",
+			vars:     map[string]interface{}{"token": "abc123"},
+			expected: "Bearer abc123",
+		},
+		{
+			name:     "variable in JSON body",
+			input:    `{"parent_id": "{{parent_id}}", "name": "test"}`,
+			vars:     map[string]interface{}{"parent_id": "xyz"},
+			expected: `{"parent_id": "xyz", "name": "test"}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := interpolateVariables(tt.input, tt.vars)
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
