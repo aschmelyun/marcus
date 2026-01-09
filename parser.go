@@ -173,6 +173,7 @@ func parseTestBlock(name, content string, defaults Defaults, baseDir string) Tes
 	// These override any defaults
 	headerPattern := regexp.MustCompile(`^-\s+([^:]+):\s*(.+)$`)
 	waitUntilPattern := regexp.MustCompile(`(?i)^-\s+Wait until status is (\d+)$`)
+	waitUntilFieldPattern := regexp.MustCompile("(?i)^-\\s+Wait until field `([^`]+)` equals `([^`]+)`$")
 	retryPattern := regexp.MustCompile(`(?i)^-\s+Retry (\d+) times every (.+)$`)
 
 	for i := methodLineIdx + 1; i < len(lines); i++ {
@@ -186,6 +187,12 @@ func parseTestBlock(name, content string, defaults Defaults, baseDir string) Tes
 			if status, err := strconv.Atoi(matches[1]); err == nil {
 				test.WaitForStatus = status
 			}
+			continue
+		}
+
+		if matches := waitUntilFieldPattern.FindStringSubmatch(line); matches != nil {
+			test.WaitForField = matches[1]
+			test.WaitForValue = matches[2]
 			continue
 		}
 

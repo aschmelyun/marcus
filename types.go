@@ -13,6 +13,8 @@ type Test struct {
 	Assertions  []Assertion
 	// Retry configuration for polling async endpoints
 	WaitForStatus int           // Status code to wait for (0 = no waiting)
+	WaitForField  string        // Field path to wait for (e.g., "message.code")
+	WaitForValue  string        // Value the field should equal
 	RetryDelay    time.Duration // Delay between retries (default: 1s)
 	RetryMax      int           // Max retry attempts (default: 10)
 }

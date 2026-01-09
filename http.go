@@ -101,6 +101,22 @@ func runTest(test Test) error {
 		var respJSON map[string]interface{}
 		json.Unmarshal(respBody, &respJSON) // Ignore error - might not be JSON
 
+		// If waiting for a specific field value and we haven't got it yet
+		if test.WaitForField != "" {
+			actual, err := getJSONField(respJSON, test.WaitForField)
+			expected := parseExpectedValue(test.WaitForValue)
+			if err != nil || !valuesEqual(actual, expected) {
+				if attempt >= retryMax {
+					if err != nil {
+						return fmt.Errorf("wait for field `%s` failed: field not found after %d attempts", test.WaitForField, attempt)
+					}
+					return fmt.Errorf("wait for field `%s` equals `%s` failed: got `%v` after %d attempts", test.WaitForField, test.WaitForValue, actual, attempt)
+				}
+				time.Sleep(retryDelay)
+				continue
+			}
+		}
+
 		// Validate assertions
 		for _, assertion := range test.Assertions {
 			if err := validateAssertion(assertion, resp.StatusCode, respBody, respJSON, duration); err != nil {
