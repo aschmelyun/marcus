@@ -355,11 +355,13 @@ func TestParseTestBlockRetryOptions(t *testing.T) {
 	defaults := Defaults{Headers: make(map[string]string)}
 
 	tests := []struct {
-		name               string
-		content            string
-		expectedWaitFor    int
-		expectedRetryDelay time.Duration
-		expectedRetryMax   int
+		name                string
+		content             string
+		expectedWaitFor     int
+		expectedWaitField   string
+		expectedWaitValue   string
+		expectedRetryDelay  time.Duration
+		expectedRetryMax    int
 	}{
 		{
 			name: "wait and retry options",
@@ -405,6 +407,29 @@ func TestParseTestBlockRetryOptions(t *testing.T) {
 			expectedRetryDelay: 0,
 			expectedRetryMax:   0,
 		},
+		{
+			name: "wait for field equals",
+			content: "GET https://example.com/status\n- Wait until field `status.code` equals `ready`",
+			expectedWaitField: "status.code",
+			expectedWaitValue: "ready",
+		},
+		{
+			name: "wait for field with retry options",
+			content: "GET https://example.com/status\n- Wait until field `message.state` equals `completed`\n- Retry 5 times every 2s",
+			expectedWaitField:  "message.state",
+			expectedWaitValue:  "completed",
+			expectedRetryDelay: 2 * time.Second,
+			expectedRetryMax:   5,
+		},
+		{
+			name: "wait for both status and field",
+			content: `GET https://example.com/status
+- Wait until status is 200
+- Wait until field ` + "`result`" + ` equals ` + "`success`",
+			expectedWaitFor:   200,
+			expectedWaitField: "result",
+			expectedWaitValue: "success",
+		},
 	}
 
 	for _, tt := range tests {
@@ -413,6 +438,14 @@ func TestParseTestBlockRetryOptions(t *testing.T) {
 
 			if result.WaitForStatus != tt.expectedWaitFor {
 				t.Errorf("WaitForStatus: expected %d, got %d", tt.expectedWaitFor, result.WaitForStatus)
+			}
+
+			if result.WaitForField != tt.expectedWaitField {
+				t.Errorf("WaitForField: expected %q, got %q", tt.expectedWaitField, result.WaitForField)
+			}
+
+			if result.WaitForValue != tt.expectedWaitValue {
+				t.Errorf("WaitForValue: expected %q, got %q", tt.expectedWaitValue, result.WaitForValue)
 			}
 
 			if result.RetryDelay != tt.expectedRetryDelay {
