@@ -227,13 +227,14 @@ Assert:
 
 ## Retry and Polling
 
-For async endpoints, wait for a specific status code:
+For async endpoints, wait for a specific status code or field value:
 
 ```markdown
 ## Wait for job completion
 
 GET https://api.example.com/jobs/123
 - Wait until status is 200
+- Wait until field `state` equals `completed`
 - Retry 10 times every 500ms
 
 Assert:
@@ -244,9 +245,66 @@ Assert:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `Wait until status is <code>` | - | Status code to poll for |
+| `Wait until field \`path\` equals \`value\`` | - | Field value to poll for |
 | `Retry <n> times every <duration>` | 10 times every 1s | Retry configuration |
 
-The test fails if the expected status isn't received within the retry limit.
+You can use status and field conditions together—both must be satisfied. The test fails if the conditions aren't met within the retry limit.
+
+## Saving and Reusing Values
+
+Save field values from a response and use them in subsequent tests within the same file:
+
+````markdown
+## Create a user
+
+POST https://api.example.com/users
+- Content-Type: application/json
+
+```json
+{"name": "Alice"}
+```
+
+Assert:
+- Status is 201
+
+Save:
+- Field `id` as `user_id`
+- Field `token` as `auth_token`
+
+## Get the created user
+
+GET https://api.example.com/users/{{user_id}}
+- Authorization: Bearer {{auth_token}}
+
+Assert:
+- Status is 200
+- Field `name` equals `"Alice"`
+````
+
+### Usage
+
+**Save values** using a `Save:` section after assertions:
+```markdown
+Save:
+- Field `data.id` as `resource_id`
+- Field `nested.config.key` as `api_key`
+```
+
+**Use values** with `{{variable}}` syntax in URLs, headers, or request bodies:
+```markdown
+GET /resources/{{resource_id}}
+- X-Api-Key: {{api_key}}
+
+```json
+{"parent_id": "{{resource_id}}"}
+```
+```
+
+### Notes
+
+- Variables persist across all tests within a single markdown file
+- Variables reset between different test files
+- In parallel mode (`--parallel`), variables aren't shared between tests
 
 ## Output
 
