@@ -11,6 +11,7 @@ type Test struct {
 	Body        string
 	ContentType string
 	Assertions  []Assertion
+	SaveFields  []SaveField // Fields to save for use in subsequent tests
 	// Retry configuration for polling async endpoints
 	WaitForStatus int           // Status code to wait for (0 = no waiting)
 	WaitForField  string        // Field path to wait for (e.g., "message.code")
@@ -24,6 +25,12 @@ type Assertion struct {
 	Type  string // "status", "body_contains", "field_equals"
 	Field string // for field_equals: the field path (e.g., "json.username")
 	Value string // expected value
+}
+
+// SaveField represents a field to save from the response
+type SaveField struct {
+	Field    string // JSON path to extract (e.g., "data.id")
+	Variable string // Variable name to save as (e.g., "user_id")
 }
 
 // TestFile represents a markdown file containing tests

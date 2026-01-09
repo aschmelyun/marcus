@@ -253,8 +253,9 @@ func parseTestBlock(name, content string, defaults Defaults, baseDir string) Tes
 		}
 	}
 
-	// Parse assertions
+	// Parse assertions and save fields
 	test.Assertions = parseAssertions(content, baseDir)
+	test.SaveFields = parseSaveFields(content)
 
 	return test
 }
@@ -388,4 +389,44 @@ func parseAssertions(content string, baseDir string) []Assertion {
 	}
 
 	return assertions
+}
+
+// parseSaveFields extracts save field directives from a test block
+func parseSaveFields(content string) []SaveField {
+	var saveFields []SaveField
+
+	// Find the save section (starts with "Save:" or "Saves:")
+	savePattern := regexp.MustCompile(`(?m)^Saves?:\s*$`)
+	loc := savePattern.FindStringIndex(content)
+	if loc == nil {
+		return saveFields
+	}
+
+	// Get content after "Save(s):"
+	saveContent := content[loc[1]:]
+
+	// Parse each save field line: "- Field `path` as `variable`"
+	saveFieldPattern := regexp.MustCompile("^Field `([^`]+)` as `([^`]+)`")
+
+	lines := strings.Split(saveContent, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if !strings.HasPrefix(line, "- ") {
+			break // Stop at first non-bullet line
+		}
+
+		line = strings.TrimPrefix(line, "- ")
+
+		if matches := saveFieldPattern.FindStringSubmatch(line); matches != nil {
+			saveFields = append(saveFields, SaveField{
+				Field:    matches[1],
+				Variable: matches[2],
+			})
+		}
+	}
+
+	return saveFields
 }

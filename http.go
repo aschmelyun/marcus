@@ -12,8 +12,32 @@ import (
 	"time"
 )
 
+// interpolateVariables replaces {{variable}} placeholders with saved values
+func interpolateVariables(s string, vars map[string]interface{}) string {
+	if vars == nil {
+		return s
+	}
+	result := s
+	for name, value := range vars {
+		placeholder := "{{" + name + "}}"
+		result = strings.ReplaceAll(result, placeholder, fmt.Sprintf("%v", value))
+	}
+	return result
+}
+
 // runTest executes a single test and validates its assertions
-func runTest(test Test) error {
+// vars contains saved variables from previous tests, and returns updated variables
+func runTest(test Test, vars map[string]interface{}) (map[string]interface{}, error) {
+	if vars == nil {
+		vars = make(map[string]interface{})
+	}
+
+	// Interpolate variables in URL, headers, and body
+	test.URL = interpolateVariables(test.URL, vars)
+	test.Body = interpolateVariables(test.Body, vars)
+	for key, value := range test.Headers {
+		test.Headers[key] = interpolateVariables(value, vars)
+	}
 	// Apply retry defaults
 	retryDelay := test.RetryDelay
 	if retryDelay == 0 {
@@ -60,7 +84,7 @@ func runTest(test Test) error {
 
 		req, err := http.NewRequest(test.Method, test.URL, bodyReader)
 		if err != nil {
-			return fmt.Errorf("failed to create request: %w", err)
+			return vars, fmt.Errorf("failed to create request: %w", err)
 		}
 
 		// Set headers
@@ -75,7 +99,7 @@ func runTest(test Test) error {
 		start := time.Now()
 		resp, err := client.Do(req)
 		if err != nil {
-			return fmt.Errorf("request failed: %w", err)
+			return vars, fmt.Errorf("request failed: %w", err)
 		}
 
 		// Read response body
@@ -83,7 +107,7 @@ func runTest(test Test) error {
 		resp.Body.Close()
 		duration := time.Since(start)
 		if err != nil {
-			return fmt.Errorf("failed to read response: %w", err)
+			return vars, fmt.Errorf("failed to read response: %w", err)
 		}
 
 		lastStatusCode = resp.StatusCode
@@ -91,7 +115,7 @@ func runTest(test Test) error {
 		// If waiting for a specific status and we haven't got it yet
 		if test.WaitForStatus != 0 && resp.StatusCode != test.WaitForStatus {
 			if attempt >= retryMax {
-				return fmt.Errorf("wait for status %d failed: got %d after %d attempts", test.WaitForStatus, lastStatusCode, attempt)
+				return vars, fmt.Errorf("wait for status %d failed: got %d after %d attempts", test.WaitForStatus, lastStatusCode, attempt)
 			}
 			time.Sleep(retryDelay)
 			continue
@@ -108,9 +132,9 @@ func runTest(test Test) error {
 			if err != nil || !valuesEqual(actual, expected) {
 				if attempt >= retryMax {
 					if err != nil {
-						return fmt.Errorf("wait for field `%s` failed: field not found after %d attempts", test.WaitForField, attempt)
+						return vars, fmt.Errorf("wait for field `%s` failed: field not found after %d attempts", test.WaitForField, attempt)
 					}
-					return fmt.Errorf("wait for field `%s` equals `%s` failed: got `%v` after %d attempts", test.WaitForField, test.WaitForValue, actual, attempt)
+					return vars, fmt.Errorf("wait for field `%s` equals `%s` failed: got `%v` after %d attempts", test.WaitForField, test.WaitForValue, actual, attempt)
 				}
 				time.Sleep(retryDelay)
 				continue
@@ -120,11 +144,20 @@ func runTest(test Test) error {
 		// Validate assertions
 		for _, assertion := range test.Assertions {
 			if err := validateAssertion(assertion, resp.StatusCode, respBody, respJSON, duration); err != nil {
-				return err
+				return vars, err
 			}
 		}
 
-		return nil
+		// Save fields for use in subsequent tests
+		for _, sf := range test.SaveFields {
+			value, err := getJSONField(respJSON, sf.Field)
+			if err != nil {
+				return vars, fmt.Errorf("save field failed: %w", err)
+			}
+			vars[sf.Variable] = value
+		}
+
+		return vars, nil
 	}
 }
 

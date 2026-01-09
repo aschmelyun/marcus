@@ -40,8 +40,13 @@ func runTestsSequential(testFiles []TestFile) (passed, failed int, totalDuration
 			fmt.Printf("%s\n", tf.Path)
 		}
 
+		// Variables are shared within a file but reset between files
+		var vars map[string]interface{}
+
 		for _, test := range tf.Tests {
-			if err := runTest(test); err != nil {
+			var err error
+			vars, err = runTest(test, vars)
+			if err != nil {
 				fmt.Printf("  %s✗%s %s\n", colorRed, colorReset, test.Name)
 				fmt.Printf("    %s→ %v%s\n", colorRed, err, colorReset)
 				failed++
@@ -103,7 +108,8 @@ func runTestsParallel(testFiles []TestFile) (passed, failed int, totalDuration t
 			defer func() { <-sem }() // Release
 
 			start := time.Now()
-			err := runTest(j.test)
+			// In parallel mode, each test gets fresh variables (no sharing)
+			_, err := runTest(j.test, nil)
 			results[idx] = TestResult{
 				FilePath:  j.filePath,
 				FileIndex: j.fileIndex,
