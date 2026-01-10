@@ -1,9 +1,29 @@
 package main
 
 import (
+	"bytes"
+	"io"
+	"os"
+	"strings"
 	"testing"
 	"time"
 )
+
+// captureOutput captures stdout during the execution of a function
+func captureOutput(f func()) string {
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	f()
+
+	w.Close()
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	return buf.String()
+}
 
 func TestParseFrontmatter(t *testing.T) {
 	tests := []struct {
@@ -859,4 +879,172 @@ func TestInterpolateVariables(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRunTestsSequentialQuietMode(t *testing.T) {
+	// Create test files with passing tests
+	passingTests := []TestFile{
+		{
+			Path: "test.md",
+			Tests: []Test{
+				{
+					Name:   "Passing Test 1",
+					Method: "GET",
+					URL:    "https://httpbin.org/status/200",
+					Assertions: []Assertion{
+						{Type: "status", Value: "200"},
+					},
+				},
+				{
+					Name:   "Passing Test 2",
+					Method: "GET",
+					URL:    "https://httpbin.org/status/200",
+					Assertions: []Assertion{
+						{Type: "status", Value: "200"},
+					},
+				},
+			},
+		},
+	}
+
+	t.Run("quiet mode hides passing tests", func(t *testing.T) {
+		output := captureOutput(func() {
+			runTestsSequential(passingTests, true)
+		})
+
+		// In quiet mode with all passing, output should NOT contain test names
+		if strings.Contains(output, "Passing Test 1") {
+			t.Error("quiet mode should not show passing test names")
+		}
+		if strings.Contains(output, "Passing Test 2") {
+			t.Error("quiet mode should not show passing test names")
+		}
+		// Should not contain checkmarks
+		if strings.Contains(output, "✓") {
+			t.Error("quiet mode should not show checkmarks for passing tests")
+		}
+	})
+
+	t.Run("normal mode shows passing tests", func(t *testing.T) {
+		output := captureOutput(func() {
+			runTestsSequential(passingTests, false)
+		})
+
+		// In normal mode, output should contain test names
+		if !strings.Contains(output, "Passing Test 1") {
+			t.Error("normal mode should show passing test names")
+		}
+		if !strings.Contains(output, "Passing Test 2") {
+			t.Error("normal mode should show passing test names")
+		}
+		// Should contain checkmarks
+		if !strings.Contains(output, "✓") {
+			t.Error("normal mode should show checkmarks for passing tests")
+		}
+	})
+}
+
+func TestRunTestsSequentialQuietModeWithFailures(t *testing.T) {
+	// Create test files with a mix of passing and failing tests
+	mixedTests := []TestFile{
+		{
+			Path: "test.md",
+			Tests: []Test{
+				{
+					Name:   "Passing Test",
+					Method: "GET",
+					URL:    "https://httpbin.org/status/200",
+					Assertions: []Assertion{
+						{Type: "status", Value: "200"},
+					},
+				},
+				{
+					Name:   "Failing Test",
+					Method: "GET",
+					URL:    "https://httpbin.org/status/404",
+					Assertions: []Assertion{
+						{Type: "status", Value: "200"},
+					},
+				},
+			},
+		},
+	}
+
+	t.Run("quiet mode shows failing tests only", func(t *testing.T) {
+		output := captureOutput(func() {
+			runTestsSequential(mixedTests, true)
+		})
+
+		// Should NOT show passing test
+		if strings.Contains(output, "Passing Test") {
+			t.Error("quiet mode should not show passing test names")
+		}
+		// Should show failing test
+		if !strings.Contains(output, "Failing Test") {
+			t.Error("quiet mode should show failing test names")
+		}
+		// Should contain X mark for failure
+		if !strings.Contains(output, "✗") {
+			t.Error("quiet mode should show X marks for failing tests")
+		}
+		// Should contain error message
+		if !strings.Contains(output, "status assertion failed") {
+			t.Error("quiet mode should show error messages")
+		}
+	})
+}
+
+func TestRunTestsParallelQuietMode(t *testing.T) {
+	// Create test files with passing tests
+	passingTests := []TestFile{
+		{
+			Path: "test.md",
+			Tests: []Test{
+				{
+					Name:   "Parallel Passing 1",
+					Method: "GET",
+					URL:    "https://httpbin.org/status/200",
+					Assertions: []Assertion{
+						{Type: "status", Value: "200"},
+					},
+				},
+				{
+					Name:   "Parallel Passing 2",
+					Method: "GET",
+					URL:    "https://httpbin.org/status/200",
+					Assertions: []Assertion{
+						{Type: "status", Value: "200"},
+					},
+				},
+			},
+		},
+	}
+
+	t.Run("quiet mode hides passing tests in parallel", func(t *testing.T) {
+		output := captureOutput(func() {
+			runTestsParallel(passingTests, true)
+		})
+
+		// In quiet mode with all passing, output should NOT contain test names
+		if strings.Contains(output, "Parallel Passing 1") {
+			t.Error("quiet mode should not show passing test names")
+		}
+		if strings.Contains(output, "Parallel Passing 2") {
+			t.Error("quiet mode should not show passing test names")
+		}
+	})
+
+	t.Run("normal mode shows passing tests in parallel", func(t *testing.T) {
+		output := captureOutput(func() {
+			runTestsParallel(passingTests, false)
+		})
+
+		// In normal mode, output should contain test names
+		if !strings.Contains(output, "Parallel Passing 1") {
+			t.Error("normal mode should show passing test names")
+		}
+		if !strings.Contains(output, "Parallel Passing 2") {
+			t.Error("normal mode should show passing test names")
+		}
+	})
 }
