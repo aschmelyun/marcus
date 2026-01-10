@@ -21,6 +21,10 @@ go build -o marcus .
 
 # Run tests in parallel
 ./marcus --parallel tests/
+
+# Quiet mode - only show failures
+./marcus --quiet tests/
+./marcus -q tests/
 ```
 
 ## Test File Format
@@ -336,6 +340,29 @@ tests/orders.md
   523ms
 
 5 passed in 835ms
+```
+
+### Quiet Mode
+
+Use `--quiet` or `-q` to suppress output for passing tests. Only failures are shown:
+
+```
+$ ./marcus --quiet tests/
+
+tests/api.md
+  ✗ Delete user
+    → status assertion failed: expected 204, got 403
+  287ms
+
+4 passed, 1 failed in 835ms
+```
+
+When all tests pass, only the summary is displayed:
+
+```
+$ ./marcus --quiet tests/
+
+5 passed in 423ms
 ```
 
 ## Project Structure Example
