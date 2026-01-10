@@ -30,13 +30,14 @@ func formatDuration(d time.Duration) string {
 }
 
 // runTestsSequential runs all tests one after another
-func runTestsSequential(testFiles []TestFile) (passed, failed int, totalDuration time.Duration) {
+func runTestsSequential(testFiles []TestFile, quiet bool) (passed, failed int, totalDuration time.Duration) {
 	suiteStart := time.Now()
 
 	for _, tf := range testFiles {
 		fileStart := time.Now()
+		fileHasFailure := false
 
-		if len(testFiles) > 1 {
+		if !quiet && len(testFiles) > 1 {
 			fmt.Printf("%s\n", tf.Path)
 		}
 
@@ -47,22 +48,31 @@ func runTestsSequential(testFiles []TestFile) (passed, failed int, totalDuration
 			var err error
 			vars, err = runTest(test, vars)
 			if err != nil {
+				// In quiet mode, print file header before first failure
+				if quiet && !fileHasFailure && len(testFiles) > 1 {
+					fmt.Printf("%s\n", tf.Path)
+				}
+				fileHasFailure = true
 				fmt.Printf("  %s✗%s %s\n", colorRed, colorReset, test.Name)
 				fmt.Printf("    %s→ %v%s\n", colorRed, err, colorReset)
 				failed++
 			} else {
-				fmt.Printf("  %s✓%s %s\n", colorGreen, colorReset, test.Name)
+				if !quiet {
+					fmt.Printf("  %s✓%s %s\n", colorGreen, colorReset, test.Name)
+				}
 				passed++
 			}
 		}
 
 		fileDuration := time.Since(fileStart)
-		if len(testFiles) > 1 {
+		if !quiet && len(testFiles) > 1 {
+			fmt.Printf("  %s%s%s\n\n", colorDim, formatDuration(fileDuration), colorReset)
+		} else if quiet && fileHasFailure && len(testFiles) > 1 {
 			fmt.Printf("  %s%s%s\n\n", colorDim, formatDuration(fileDuration), colorReset)
 		}
 	}
 
-	if len(testFiles) == 1 {
+	if !quiet && len(testFiles) == 1 {
 		fmt.Println()
 	}
 
@@ -71,7 +81,7 @@ func runTestsSequential(testFiles []TestFile) (passed, failed int, totalDuration
 }
 
 // runTestsParallel runs all tests concurrently, limited by CPU cores
-func runTestsParallel(testFiles []TestFile) (passed, failed int, totalDuration time.Duration) {
+func runTestsParallel(testFiles []TestFile, quiet bool) (passed, failed int, totalDuration time.Duration) {
 	suiteStart := time.Now()
 	maxWorkers := runtime.NumCPU()
 	sem := make(chan struct{}, maxWorkers)
@@ -125,41 +135,56 @@ func runTestsParallel(testFiles []TestFile) (passed, failed int, totalDuration t
 
 	// Calculate per-file durations (max test duration since they run in parallel)
 	fileDurations := make(map[int]time.Duration)
+	fileHasFailure := make(map[int]bool)
 	for _, result := range results {
 		if result.Duration > fileDurations[result.FileIndex] {
 			fileDurations[result.FileIndex] = result.Duration
+		}
+		if result.Err != nil {
+			fileHasFailure[result.FileIndex] = true
 		}
 	}
 
 	// Print results in order, grouped by file
 	currentFile := ""
 	currentFileIndex := -1
+	filePrinted := make(map[int]bool)
 	for i, job := range jobs {
 		if len(testFiles) > 1 && job.filePath != currentFile {
 			// Print previous file's duration
-			if currentFile != "" {
+			if currentFile != "" && (!quiet || fileHasFailure[currentFileIndex]) {
 				fmt.Printf("  %s%s%s\n\n", colorDim, formatDuration(fileDurations[currentFileIndex]), colorReset)
 			}
-			fmt.Printf("%s\n", job.filePath)
+			if !quiet {
+				fmt.Printf("%s\n", job.filePath)
+				filePrinted[job.fileIndex] = true
+			}
 			currentFile = job.filePath
 			currentFileIndex = job.fileIndex
 		}
 
 		result := results[i]
 		if result.Err != nil {
+			// In quiet mode, print file header before first failure in this file
+			if quiet && !filePrinted[job.fileIndex] && len(testFiles) > 1 {
+				fmt.Printf("%s\n", job.filePath)
+				filePrinted[job.fileIndex] = true
+			}
 			fmt.Printf("  %s✗%s %s\n", colorRed, colorReset, result.Test.Name)
 			fmt.Printf("    %s→ %v%s\n", colorRed, result.Err, colorReset)
 			failed++
 		} else {
-			fmt.Printf("  %s✓%s %s\n", colorGreen, colorReset, result.Test.Name)
+			if !quiet {
+				fmt.Printf("  %s✓%s %s\n", colorGreen, colorReset, result.Test.Name)
+			}
 			passed++
 		}
 	}
 
 	// Print last file's duration if multiple files
-	if len(testFiles) > 1 {
+	if len(testFiles) > 1 && (!quiet || fileHasFailure[currentFileIndex]) {
 		fmt.Printf("  %s%s%s\n\n", colorDim, formatDuration(fileDurations[currentFileIndex]), colorReset)
-	} else {
+	} else if !quiet {
 		fmt.Println()
 	}
 

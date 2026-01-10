@@ -8,24 +8,27 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "Usage: marcus [--parallel] <file-or-directory>")
+		fmt.Fprintln(os.Stderr, "Usage: marcus [--parallel] [--quiet] <file-or-directory>")
 		os.Exit(1)
 	}
 
 	// Parse arguments
 	parallel := false
+	quiet := false
 	target := ""
 
 	for _, arg := range os.Args[1:] {
 		if arg == "--parallel" {
 			parallel = true
+		} else if arg == "--quiet" || arg == "-q" {
+			quiet = true
 		} else if target == "" {
 			target = arg
 		}
 	}
 
 	if target == "" {
-		fmt.Fprintln(os.Stderr, "Usage: marcus [--parallel] <file-or-directory>")
+		fmt.Fprintln(os.Stderr, "Usage: marcus [--parallel] [--quiet] <file-or-directory>")
 		os.Exit(1)
 	}
 
@@ -52,19 +55,21 @@ func main() {
 	}
 
 	// Print summary header
-	if len(testFiles) == 1 {
-		fmt.Printf("%s (%d tests)\n\n", testFiles[0].Path, totalTests)
-	} else {
-		fmt.Printf("%s (%d files, %d tests)\n\n", target, len(testFiles), totalTests)
+	if !quiet {
+		if len(testFiles) == 1 {
+			fmt.Printf("%s (%d tests)\n\n", testFiles[0].Path, totalTests)
+		} else {
+			fmt.Printf("%s (%d files, %d tests)\n\n", target, len(testFiles), totalTests)
+		}
 	}
 
 	var passed, failed int
 	var totalDuration time.Duration
 
 	if parallel {
-		passed, failed, totalDuration = runTestsParallel(testFiles)
+		passed, failed, totalDuration = runTestsParallel(testFiles, quiet)
 	} else {
-		passed, failed, totalDuration = runTestsSequential(testFiles)
+		passed, failed, totalDuration = runTestsSequential(testFiles, quiet)
 	}
 
 	if failed == 0 {
