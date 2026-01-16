@@ -170,6 +170,14 @@ func validateAssertion(assertion Assertion, statusCode int, body []byte, jsonBod
 			return fmt.Errorf("invalid status code in assertion: %s", assertion.Value)
 		}
 		if statusCode != expected {
+			// Include response body in error for debugging (truncate if too long)
+			bodyPreview := string(body)
+			if len(bodyPreview) > 500 {
+				bodyPreview = bodyPreview[:500] + "..."
+			}
+			if bodyPreview != "" {
+				return fmt.Errorf("status assertion failed: expected %d, got %d\n       Response: %s", expected, statusCode, bodyPreview)
+			}
 			return fmt.Errorf("status assertion failed: expected %d, got %d", expected, statusCode)
 		}
 
