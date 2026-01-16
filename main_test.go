@@ -1048,3 +1048,57 @@ func TestRunTestsParallelQuietMode(t *testing.T) {
 		}
 	})
 }
+
+func TestStatusFailureShowsResponseBody(t *testing.T) {
+	// This test uses an endpoint that returns a JSON body
+	// We assert the wrong status to trigger a failure with body content
+	failingTests := []TestFile{
+		{
+			Path: "test.md",
+			Tests: []Test{
+				{
+					Name:   "Status Mismatch Test",
+					Method: "POST",
+					URL:    "https://httpbin.org/post",
+					Assertions: []Assertion{
+						{Type: "status", Value: "201"}, // Will get 200, so this fails
+					},
+				},
+			},
+		},
+	}
+
+	t.Run("normal mode shows response body on status failure", func(t *testing.T) {
+		output := captureOutput(func() {
+			runTestsSequential(failingTests, false)
+		})
+
+		// Should show the status mismatch
+		if !strings.Contains(output, "expected 201, got 200") {
+			t.Error("should show status mismatch")
+		}
+		// Should show "Response:" with body content
+		if !strings.Contains(output, "Response:") {
+			t.Error("normal mode should show Response: label")
+		}
+		// httpbin.org/post returns JSON with "url" field
+		if !strings.Contains(output, "httpbin.org/post") {
+			t.Error("normal mode should show response body content")
+		}
+	})
+
+	t.Run("quiet mode hides response body on status failure", func(t *testing.T) {
+		output := captureOutput(func() {
+			runTestsSequential(failingTests, true)
+		})
+
+		// Should still show the status mismatch
+		if !strings.Contains(output, "expected 201, got 200") {
+			t.Error("should show status mismatch")
+		}
+		// Should NOT show "Response:" or body content
+		if strings.Contains(output, "Response:") {
+			t.Error("quiet mode should not show Response: label")
+		}
+	})
+}
