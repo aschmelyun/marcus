@@ -319,9 +319,12 @@ tests/api.md (3 tests)
   ✓ Create user
   ✗ Delete user
     → status assertion failed: expected 204, got 403
+       Response: {"error": "Forbidden", "message": "Insufficient permissions"}
 
 2 passed, 1 failed in 1.24s
 ```
+
+When a status assertion fails, the response body is displayed (up to 500 characters) to help debug the issue. This is especially useful for 4xx/5xx errors that include error messages.
 
 When running a directory:
 
@@ -344,7 +347,7 @@ tests/orders.md
 
 ### Quiet Mode
 
-Use `--quiet` or `-q` to suppress output for passing tests. Only failures are shown:
+Use `--quiet` or `-q` to suppress output for passing tests. Only failures are shown, and response bodies are hidden from error messages:
 
 ```
 $ ./marcus --quiet tests/
