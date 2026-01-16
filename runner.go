@@ -21,6 +21,18 @@ const (
 	colorBold   = "\033[1m"
 )
 
+// formatError formats an error message, optionally stripping verbose details in quiet mode
+func formatError(err error, quiet bool) string {
+	msg := err.Error()
+	if quiet {
+		// Strip response body from status assertion errors
+		if idx := strings.Index(msg, "\n       Response:"); idx != -1 {
+			msg = msg[:idx]
+		}
+	}
+	return msg
+}
+
 // formatDuration formats a duration in a human-readable way
 func formatDuration(d time.Duration) string {
 	if d < time.Second {
@@ -54,7 +66,7 @@ func runTestsSequential(testFiles []TestFile, quiet bool) (passed, failed int, t
 				}
 				fileHasFailure = true
 				fmt.Printf("  %s✗%s %s\n", colorRed, colorReset, test.Name)
-				fmt.Printf("    %s→ %v%s\n", colorRed, err, colorReset)
+				fmt.Printf("    %s→ %s%s\n", colorRed, formatError(err, quiet), colorReset)
 				failed++
 			} else {
 				if !quiet {
@@ -171,7 +183,7 @@ func runTestsParallel(testFiles []TestFile, quiet bool) (passed, failed int, tot
 				filePrinted[job.fileIndex] = true
 			}
 			fmt.Printf("  %s✗%s %s\n", colorRed, colorReset, result.Test.Name)
-			fmt.Printf("    %s→ %v%s\n", colorRed, result.Err, colorReset)
+			fmt.Printf("    %s→ %s%s\n", colorRed, formatError(result.Err, quiet), colorReset)
 			failed++
 		} else {
 			if !quiet {
