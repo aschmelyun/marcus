@@ -31,6 +31,9 @@ go build -o marcus .
 
 # Skip a specific test by number (1-indexed)
 ./marcus --skip=3 tests/api.md
+
+# Start from a specific test and run through the rest
+./marcus --start-from=3 tests/api.md
 ```
 
 ## Test File Format
