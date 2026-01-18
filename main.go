@@ -8,15 +8,16 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "Usage: marcus [--parallel] [--quiet] [--only=N] [--skip=N] <file-or-directory>")
+		fmt.Fprintln(os.Stderr, "Usage: marcus [--parallel] [--quiet] [--only=N] [--skip=N] [--start-from=N] <file-or-directory>")
 		os.Exit(1)
 	}
 
 	// Parse arguments
 	parallel := false
 	quiet := false
-	only := 0 // 0 means run all tests
-	skip := 0 // 0 means skip none
+	only := 0      // 0 means run all tests
+	skip := 0      // 0 means skip none
+	startFrom := 0 // 0 means start from beginning
 	target := ""
 
 	for _, arg := range os.Args[1:] {
@@ -40,18 +41,31 @@ func main() {
 				os.Exit(1)
 			}
 			skip = n
+		} else if len(arg) > 13 && arg[:13] == "--start-from=" {
+			var n int
+			_, err := fmt.Sscanf(arg, "--start-from=%d", &n)
+			if err != nil || n < 1 {
+				fmt.Fprintln(os.Stderr, "Error: --start-from requires a positive integer (e.g., --start-from=3)")
+				os.Exit(1)
+			}
+			startFrom = n
 		} else if target == "" {
 			target = arg
 		}
 	}
 
 	if target == "" {
-		fmt.Fprintln(os.Stderr, "Usage: marcus [--parallel] [--quiet] [--only=N] [--skip=N] <file-or-directory>")
+		fmt.Fprintln(os.Stderr, "Usage: marcus [--parallel] [--quiet] [--only=N] [--skip=N] [--start-from=N] <file-or-directory>")
 		os.Exit(1)
 	}
 
 	if only > 0 && skip > 0 {
 		fmt.Fprintln(os.Stderr, "Error: --only and --skip cannot be used together")
+		os.Exit(1)
+	}
+
+	if only > 0 && startFrom > 0 {
+		fmt.Fprintln(os.Stderr, "Error: --only and --start-from cannot be used together")
 		os.Exit(1)
 	}
 
@@ -125,6 +139,33 @@ func main() {
 		}
 	skipped:
 		totalTests--
+	}
+
+	// Start from a specific test if --start-from is specified
+	if startFrom > 0 {
+		if startFrom > totalTests {
+			fmt.Fprintf(os.Stderr, "Error: test %d does not exist (file has %d tests)\n", startFrom, totalTests)
+			os.Exit(1)
+		}
+		// Remove all tests before 'startFrom' (1-indexed)
+		testsToSkip := startFrom - 1
+		skipped := 0
+		for i := 0; i < len(testFiles) && skipped < testsToSkip; {
+			tf := &testFiles[i]
+			testsInFile := len(tf.Tests)
+			if skipped+testsInFile <= testsToSkip {
+				// Skip entire file
+				skipped += testsInFile
+				testFiles = append(testFiles[:i], testFiles[i+1:]...)
+			} else {
+				// Skip some tests from this file
+				toSkipHere := testsToSkip - skipped
+				tf.Tests = tf.Tests[toSkipHere:]
+				skipped += toSkipHere
+				i++
+			}
+		}
+		totalTests = totalTests - testsToSkip
 	}
 
 	// Print summary header
