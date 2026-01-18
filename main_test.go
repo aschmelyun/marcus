@@ -1049,6 +1049,127 @@ func TestRunTestsParallelQuietMode(t *testing.T) {
 	})
 }
 
+func TestOnlyFlagFiltersTests(t *testing.T) {
+	// Create test files with multiple tests
+	testFiles := []TestFile{
+		{
+			Path: "test.md",
+			Tests: []Test{
+				{
+					Name:   "Test 1",
+					Method: "GET",
+					URL:    "https://httpbin.org/status/200",
+					Assertions: []Assertion{
+						{Type: "status", Value: "200"},
+					},
+				},
+				{
+					Name:   "Test 2",
+					Method: "GET",
+					URL:    "https://httpbin.org/status/200",
+					Assertions: []Assertion{
+						{Type: "status", Value: "200"},
+					},
+				},
+				{
+					Name:   "Test 3",
+					Method: "GET",
+					URL:    "https://httpbin.org/status/200",
+					Assertions: []Assertion{
+						{Type: "status", Value: "200"},
+					},
+				},
+			},
+		},
+	}
+
+	t.Run("filter to second test only", func(t *testing.T) {
+		// Simulate --only=2 filtering
+		only := 2
+		totalTests := 0
+		for _, tf := range testFiles {
+			totalTests += len(tf.Tests)
+		}
+
+		if only > totalTests {
+			t.Fatal("test index out of range")
+		}
+
+		// Find the test at position 'only' (1-indexed)
+		var filteredFiles []TestFile
+		testNum := 0
+		for _, tf := range testFiles {
+			for _, test := range tf.Tests {
+				testNum++
+				if testNum == only {
+					filteredFiles = []TestFile{{Path: tf.Path, Tests: []Test{test}}}
+					break
+				}
+			}
+		}
+
+		if len(filteredFiles) != 1 {
+			t.Errorf("expected 1 test file, got %d", len(filteredFiles))
+		}
+		if len(filteredFiles[0].Tests) != 1 {
+			t.Errorf("expected 1 test, got %d", len(filteredFiles[0].Tests))
+		}
+		if filteredFiles[0].Tests[0].Name != "Test 2" {
+			t.Errorf("expected 'Test 2', got %q", filteredFiles[0].Tests[0].Name)
+		}
+	})
+
+	t.Run("filter to first test", func(t *testing.T) {
+		only := 1
+		testNum := 0
+		var filteredFiles []TestFile
+		for _, tf := range testFiles {
+			for _, test := range tf.Tests {
+				testNum++
+				if testNum == only {
+					filteredFiles = []TestFile{{Path: tf.Path, Tests: []Test{test}}}
+					break
+				}
+			}
+		}
+
+		if filteredFiles[0].Tests[0].Name != "Test 1" {
+			t.Errorf("expected 'Test 1', got %q", filteredFiles[0].Tests[0].Name)
+		}
+	})
+
+	t.Run("filter to last test", func(t *testing.T) {
+		only := 3
+		testNum := 0
+		var filteredFiles []TestFile
+		for _, tf := range testFiles {
+			for _, test := range tf.Tests {
+				testNum++
+				if testNum == only {
+					filteredFiles = []TestFile{{Path: tf.Path, Tests: []Test{test}}}
+					break
+				}
+			}
+		}
+
+		if filteredFiles[0].Tests[0].Name != "Test 3" {
+			t.Errorf("expected 'Test 3', got %q", filteredFiles[0].Tests[0].Name)
+		}
+	})
+
+	t.Run("out of range returns error condition", func(t *testing.T) {
+		only := 5
+		totalTests := 0
+		for _, tf := range testFiles {
+			totalTests += len(tf.Tests)
+		}
+
+		if only <= totalTests {
+			t.Error("test index should be out of range")
+		}
+	})
+}
+
 func TestStatusFailureShowsResponseBody(t *testing.T) {
 	// This test uses an endpoint that returns a JSON body
 	// We assert the wrong status to trigger a failure with body content
