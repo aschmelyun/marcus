@@ -8,7 +8,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "Usage: marcus [--parallel] [--quiet] [--only=N] <file-or-directory>")
+		fmt.Fprintln(os.Stderr, "Usage: marcus [--parallel] [--quiet] [--only=N] [--skip=N] <file-or-directory>")
 		os.Exit(1)
 	}
 
@@ -16,6 +16,7 @@ func main() {
 	parallel := false
 	quiet := false
 	only := 0 // 0 means run all tests
+	skip := 0 // 0 means skip none
 	target := ""
 
 	for _, arg := range os.Args[1:] {
@@ -31,13 +32,26 @@ func main() {
 				os.Exit(1)
 			}
 			only = n
+		} else if len(arg) > 7 && arg[:7] == "--skip=" {
+			var n int
+			_, err := fmt.Sscanf(arg, "--skip=%d", &n)
+			if err != nil || n < 1 {
+				fmt.Fprintln(os.Stderr, "Error: --skip requires a positive integer (e.g., --skip=3)")
+				os.Exit(1)
+			}
+			skip = n
 		} else if target == "" {
 			target = arg
 		}
 	}
 
 	if target == "" {
-		fmt.Fprintln(os.Stderr, "Usage: marcus [--parallel] [--quiet] [--only=N] <file-or-directory>")
+		fmt.Fprintln(os.Stderr, "Usage: marcus [--parallel] [--quiet] [--only=N] [--skip=N] <file-or-directory>")
+		os.Exit(1)
+	}
+
+	if only > 0 && skip > 0 {
+		fmt.Fprintln(os.Stderr, "Error: --only and --skip cannot be used together")
 		os.Exit(1)
 	}
 
@@ -85,6 +99,32 @@ func main() {
 		}
 	filtered:
 		totalTests = 1
+	}
+
+	// Skip a single test if --skip is specified
+	if skip > 0 {
+		if skip > totalTests {
+			fmt.Fprintf(os.Stderr, "Error: test %d does not exist (file has %d tests)\n", skip, totalTests)
+			os.Exit(1)
+		}
+		// Remove the test at position 'skip' (1-indexed)
+		testNum := 0
+		for i, tf := range testFiles {
+			for j := range tf.Tests {
+				testNum++
+				if testNum == skip {
+					// Remove test j from this file
+					testFiles[i].Tests = append(tf.Tests[:j], tf.Tests[j+1:]...)
+					// Remove the file if it has no tests left
+					if len(testFiles[i].Tests) == 0 {
+						testFiles = append(testFiles[:i], testFiles[i+1:]...)
+					}
+					goto skipped
+				}
+			}
+		}
+	skipped:
+		totalTests--
 	}
 
 	// Print summary header
