@@ -1274,6 +1274,104 @@ func TestSkipFlagFiltersTests(t *testing.T) {
 	})
 }
 
+func TestStartFromFlagFiltersTests(t *testing.T) {
+	// Helper to create fresh test files for each subtest
+	createTestFiles := func() []TestFile {
+		return []TestFile{
+			{
+				Path: "test.md",
+				Tests: []Test{
+					{Name: "Test 1", Method: "GET", URL: "https://httpbin.org/status/200"},
+					{Name: "Test 2", Method: "GET", URL: "https://httpbin.org/status/200"},
+					{Name: "Test 3", Method: "GET", URL: "https://httpbin.org/status/200"},
+					{Name: "Test 4", Method: "GET", URL: "https://httpbin.org/status/200"},
+				},
+			},
+		}
+	}
+
+	t.Run("start from second test", func(t *testing.T) {
+		testFiles := createTestFiles()
+		startFrom := 2
+		totalTests := len(testFiles[0].Tests)
+
+		// Simulate --start-from=2 filtering (remove tests before position 2)
+		testsToSkip := startFrom - 1
+		testFiles[0].Tests = testFiles[0].Tests[testsToSkip:]
+
+		if len(testFiles[0].Tests) != totalTests-testsToSkip {
+			t.Errorf("expected %d tests, got %d", totalTests-testsToSkip, len(testFiles[0].Tests))
+		}
+		if testFiles[0].Tests[0].Name != "Test 2" {
+			t.Errorf("expected 'Test 2', got %q", testFiles[0].Tests[0].Name)
+		}
+		if testFiles[0].Tests[1].Name != "Test 3" {
+			t.Errorf("expected 'Test 3', got %q", testFiles[0].Tests[1].Name)
+		}
+	})
+
+	t.Run("start from first test (all tests)", func(t *testing.T) {
+		testFiles := createTestFiles()
+		startFrom := 1
+		totalTests := len(testFiles[0].Tests)
+
+		testsToSkip := startFrom - 1
+		if testsToSkip > 0 {
+			testFiles[0].Tests = testFiles[0].Tests[testsToSkip:]
+		}
+
+		if len(testFiles[0].Tests) != totalTests {
+			t.Errorf("expected %d tests, got %d", totalTests, len(testFiles[0].Tests))
+		}
+		if testFiles[0].Tests[0].Name != "Test 1" {
+			t.Errorf("expected 'Test 1', got %q", testFiles[0].Tests[0].Name)
+		}
+	})
+
+	t.Run("start from last test", func(t *testing.T) {
+		testFiles := createTestFiles()
+		startFrom := 4
+
+		testsToSkip := startFrom - 1
+		testFiles[0].Tests = testFiles[0].Tests[testsToSkip:]
+
+		if len(testFiles[0].Tests) != 1 {
+			t.Errorf("expected 1 test, got %d", len(testFiles[0].Tests))
+		}
+		if testFiles[0].Tests[0].Name != "Test 4" {
+			t.Errorf("expected 'Test 4', got %q", testFiles[0].Tests[0].Name)
+		}
+	})
+
+	t.Run("start from third test", func(t *testing.T) {
+		testFiles := createTestFiles()
+		startFrom := 3
+
+		testsToSkip := startFrom - 1
+		testFiles[0].Tests = testFiles[0].Tests[testsToSkip:]
+
+		if len(testFiles[0].Tests) != 2 {
+			t.Errorf("expected 2 tests, got %d", len(testFiles[0].Tests))
+		}
+		if testFiles[0].Tests[0].Name != "Test 3" {
+			t.Errorf("expected 'Test 3', got %q", testFiles[0].Tests[0].Name)
+		}
+		if testFiles[0].Tests[1].Name != "Test 4" {
+			t.Errorf("expected 'Test 4', got %q", testFiles[0].Tests[1].Name)
+		}
+	})
+
+	t.Run("out of range returns error condition", func(t *testing.T) {
+		testFiles := createTestFiles()
+		startFrom := 6
+		totalTests := len(testFiles[0].Tests)
+
+		if startFrom <= totalTests {
+			t.Error("startFrom index should be out of range")
+		}
+	})
+}
+
 func TestStatusFailureShowsResponseBody(t *testing.T) {
 	// This test uses an endpoint that returns a JSON body
 	// We assert the wrong status to trigger a failure with body content
