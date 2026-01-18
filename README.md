@@ -25,6 +25,9 @@ go build -o marcus .
 # Quiet mode - only show failures
 ./marcus --quiet tests/
 ./marcus -q tests/
+
+# Run a single test by number (1-indexed)
+./marcus --only=2 tests/api.md
 ```
 
 ## Test File Format
