@@ -28,6 +28,9 @@ go build -o marcus .
 
 # Run a single test by number (1-indexed)
 ./marcus --only=2 tests/api.md
+
+# Skip a specific test by number (1-indexed)
+./marcus --skip=3 tests/api.md
 ```
 
 ## Test File Format
