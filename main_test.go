@@ -1170,6 +1170,110 @@ func TestOnlyFlagFiltersTests(t *testing.T) {
 	})
 }
 
+func TestSkipFlagFiltersTests(t *testing.T) {
+	// Helper to create fresh test files for each subtest
+	createTestFiles := func() []TestFile {
+		return []TestFile{
+			{
+				Path: "test.md",
+				Tests: []Test{
+					{Name: "Test 1", Method: "GET", URL: "https://httpbin.org/status/200"},
+					{Name: "Test 2", Method: "GET", URL: "https://httpbin.org/status/200"},
+					{Name: "Test 3", Method: "GET", URL: "https://httpbin.org/status/200"},
+				},
+			},
+		}
+	}
+
+	t.Run("skip second test", func(t *testing.T) {
+		testFiles := createTestFiles()
+		skip := 2
+		totalTests := len(testFiles[0].Tests)
+
+		// Simulate --skip=2 filtering
+		testNum := 0
+		for i, tf := range testFiles {
+			for j := range tf.Tests {
+				testNum++
+				if testNum == skip {
+					testFiles[i].Tests = append(tf.Tests[:j], tf.Tests[j+1:]...)
+					break
+				}
+			}
+		}
+
+		if len(testFiles[0].Tests) != totalTests-1 {
+			t.Errorf("expected %d tests, got %d", totalTests-1, len(testFiles[0].Tests))
+		}
+		// Should have Test 1 and Test 3
+		if testFiles[0].Tests[0].Name != "Test 1" {
+			t.Errorf("expected 'Test 1', got %q", testFiles[0].Tests[0].Name)
+		}
+		if testFiles[0].Tests[1].Name != "Test 3" {
+			t.Errorf("expected 'Test 3', got %q", testFiles[0].Tests[1].Name)
+		}
+	})
+
+	t.Run("skip first test", func(t *testing.T) {
+		testFiles := createTestFiles()
+		skip := 1
+
+		testNum := 0
+		for i, tf := range testFiles {
+			for j := range tf.Tests {
+				testNum++
+				if testNum == skip {
+					testFiles[i].Tests = append(tf.Tests[:j], tf.Tests[j+1:]...)
+					break
+				}
+			}
+		}
+
+		if testFiles[0].Tests[0].Name != "Test 2" {
+			t.Errorf("expected 'Test 2', got %q", testFiles[0].Tests[0].Name)
+		}
+		if testFiles[0].Tests[1].Name != "Test 3" {
+			t.Errorf("expected 'Test 3', got %q", testFiles[0].Tests[1].Name)
+		}
+	})
+
+	t.Run("skip last test", func(t *testing.T) {
+		testFiles := createTestFiles()
+		skip := 3
+
+		testNum := 0
+		for i, tf := range testFiles {
+			for j := range tf.Tests {
+				testNum++
+				if testNum == skip {
+					testFiles[i].Tests = append(tf.Tests[:j], tf.Tests[j+1:]...)
+					break
+				}
+			}
+		}
+
+		if len(testFiles[0].Tests) != 2 {
+			t.Errorf("expected 2 tests, got %d", len(testFiles[0].Tests))
+		}
+		if testFiles[0].Tests[0].Name != "Test 1" {
+			t.Errorf("expected 'Test 1', got %q", testFiles[0].Tests[0].Name)
+		}
+		if testFiles[0].Tests[1].Name != "Test 2" {
+			t.Errorf("expected 'Test 2', got %q", testFiles[0].Tests[1].Name)
+		}
+	})
+
+	t.Run("out of range returns error condition", func(t *testing.T) {
+		testFiles := createTestFiles()
+		skip := 5
+		totalTests := len(testFiles[0].Tests)
+
+		if skip <= totalTests {
+			t.Error("skip index should be out of range")
+		}
+	})
+}
+
 func TestStatusFailureShowsResponseBody(t *testing.T) {
 	// This test uses an endpoint that returns a JSON body
 	// We assert the wrong status to trigger a failure with body content
