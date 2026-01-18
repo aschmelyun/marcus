@@ -8,13 +8,14 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "Usage: marcus [--parallel] [--quiet] <file-or-directory>")
+		fmt.Fprintln(os.Stderr, "Usage: marcus [--parallel] [--quiet] [--only=N] <file-or-directory>")
 		os.Exit(1)
 	}
 
 	// Parse arguments
 	parallel := false
 	quiet := false
+	only := 0 // 0 means run all tests
 	target := ""
 
 	for _, arg := range os.Args[1:] {
@@ -22,13 +23,21 @@ func main() {
 			parallel = true
 		} else if arg == "--quiet" || arg == "-q" {
 			quiet = true
+		} else if len(arg) > 7 && arg[:7] == "--only=" {
+			var n int
+			_, err := fmt.Sscanf(arg, "--only=%d", &n)
+			if err != nil || n < 1 {
+				fmt.Fprintln(os.Stderr, "Error: --only requires a positive integer (e.g., --only=3)")
+				os.Exit(1)
+			}
+			only = n
 		} else if target == "" {
 			target = arg
 		}
 	}
 
 	if target == "" {
-		fmt.Fprintln(os.Stderr, "Usage: marcus [--parallel] [--quiet] <file-or-directory>")
+		fmt.Fprintln(os.Stderr, "Usage: marcus [--parallel] [--quiet] [--only=N] <file-or-directory>")
 		os.Exit(1)
 	}
 
@@ -52,6 +61,30 @@ func main() {
 	if totalTests == 0 {
 		fmt.Println("No tests found.")
 		return
+	}
+
+	// Filter to single test if --only is specified
+	if only > 0 {
+		if only > totalTests {
+			fmt.Fprintf(os.Stderr, "Error: test %d does not exist (file has %d tests)\n", only, totalTests)
+			os.Exit(1)
+		}
+		// Find the test at position 'only' (1-indexed)
+		testNum := 0
+		for i, tf := range testFiles {
+			for j, test := range tf.Tests {
+				testNum++
+				if testNum == only {
+					testFiles = []TestFile{{Path: tf.Path, Tests: []Test{test}}}
+					testFiles[0].Tests[0].Name = fmt.Sprintf("%s (#%d)", test.Name, only)
+					_ = i // silence unused warning
+					_ = j
+					goto filtered
+				}
+			}
+		}
+	filtered:
+		totalTests = 1
 	}
 
 	// Print summary header
