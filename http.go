@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -185,24 +186,49 @@ func validateAssertion(assertion Assertion, statusCode int, body []byte, jsonBod
 		if jsonBody == nil {
 			return fmt.Errorf("body contains assertion failed: response is not valid JSON")
 		}
-		if _, exists := jsonBody[assertion.Field]; !exists {
-			return fmt.Errorf("body contains assertion failed: field '%s' not found in response", assertion.Field)
+		fieldPath, transforms := splitFieldTransforms(assertion.Field)
+		if len(transforms) > 0 {
+			value, err := getJSONField(jsonBody, fieldPath)
+			if err != nil {
+				return fmt.Errorf("body contains assertion failed: field '%s' not found in response", fieldPath)
+			}
+			transformed, err := applyTransforms(fmt.Sprintf("%v", value), transforms)
+			if err != nil {
+				return fmt.Errorf("body contains assertion failed: %w", err)
+			}
+			if transformed == "" {
+				return fmt.Errorf("body contains assertion failed: field '%s' is empty after transform", fieldPath)
+			}
+		} else {
+			if _, exists := jsonBody[fieldPath]; !exists {
+				return fmt.Errorf("body contains assertion failed: field '%s' not found in response", fieldPath)
+			}
 		}
 
 	case "field_equals":
 		if jsonBody == nil {
 			return fmt.Errorf("field equals assertion failed: response is not valid JSON")
 		}
-		actual, err := getJSONField(jsonBody, assertion.Field)
+		fieldPath, transforms := splitFieldTransforms(assertion.Field)
+		actual, err := getJSONField(jsonBody, fieldPath)
 		if err != nil {
 			return fmt.Errorf("field equals assertion failed: %w", err)
 		}
 
-		// Parse the expected value (handle quoted strings, booleans, numbers)
-		expected := parseExpectedValue(assertion.Value)
-
-		if !valuesEqual(actual, expected) {
-			return fmt.Errorf("field equals assertion failed: field '%s' expected %v, got %v", assertion.Field, expected, actual)
+		if len(transforms) > 0 {
+			transformed, err := applyTransforms(fmt.Sprintf("%v", actual), transforms)
+			if err != nil {
+				return fmt.Errorf("field equals assertion failed: %w", err)
+			}
+			expected := parseExpectedValue(assertion.Value)
+			if !valuesEqual(transformed, expected) {
+				return fmt.Errorf("field equals assertion failed: field '%s' expected %v, got %v (after transform)", assertion.Field, expected, transformed)
+			}
+		} else {
+			expected := parseExpectedValue(assertion.Value)
+			if !valuesEqual(actual, expected) {
+				return fmt.Errorf("field equals assertion failed: field '%s' expected %v, got %v", assertion.Field, expected, actual)
+			}
 		}
 
 	case "duration":
@@ -273,6 +299,50 @@ func validateAssertion(assertion Assertion, statusCode int, body []byte, jsonBod
 	}
 
 	return nil
+}
+
+// splitFieldTransforms separates a field path from pipe-separated transforms.
+// e.g. "data.token | base64" returns ("data.token", ["base64"])
+func splitFieldTransforms(field string) (string, []string) {
+	parts := strings.Split(field, "|")
+	path := strings.TrimSpace(parts[0])
+	var transforms []string
+	for _, p := range parts[1:] {
+		t := strings.TrimSpace(p)
+		if t != "" {
+			transforms = append(transforms, t)
+		}
+	}
+	return path, transforms
+}
+
+// applyTransforms applies a sequence of named transforms to a string value.
+// Currently supports: "base64" (base64 decode).
+func applyTransforms(value string, transforms []string) (string, error) {
+	result := value
+	for _, t := range transforms {
+		switch t {
+		case "base64":
+			// Try standard encoding first, then URL-safe, then raw variants
+			decoded, err := base64.StdEncoding.DecodeString(result)
+			if err != nil {
+				decoded, err = base64.URLEncoding.DecodeString(result)
+			}
+			if err != nil {
+				decoded, err = base64.RawStdEncoding.DecodeString(result)
+			}
+			if err != nil {
+				decoded, err = base64.RawURLEncoding.DecodeString(result)
+			}
+			if err != nil {
+				return "", fmt.Errorf("base64 decode failed for value %q: %w", result, err)
+			}
+			result = string(decoded)
+		default:
+			return "", fmt.Errorf("unknown transform: %s", t)
+		}
+	}
+	return result, nil
 }
 
 // parseDuration parses a duration string like "500ms" or "2s"

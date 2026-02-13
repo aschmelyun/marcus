@@ -47,6 +47,7 @@ Assertions should be written in plain, human-readable English. Avoid symbols lik
 - `Field \`path.to.field\` equals \`value\`` - Checks field value (supports dot notation for nested fields)
 - `Body matches file \`path/to/file.json\`` - Compares entire response body against external file (JSON is normalized before comparison)
 - `Duration less than <time>` - Checks response time (e.g., `500ms`, `2s`)
+- `Field \`path | base64\` equals \`value\`` - Decode base64 field value before comparing (pipe syntax, extensible for future transforms)
 
 ## Architecture
 

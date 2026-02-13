@@ -1372,6 +1372,141 @@ func TestStartFromFlagFiltersTests(t *testing.T) {
 	})
 }
 
+func TestSplitFieldTransforms(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      string
+		expectPath string
+		expectTx   []string
+	}{
+		{name: "no transform", input: "data.token", expectPath: "data.token", expectTx: nil},
+		{name: "single transform", input: "data.token | base64", expectPath: "data.token", expectTx: []string{"base64"}},
+		{name: "no spaces around pipe", input: "data.token|base64", expectPath: "data.token", expectTx: []string{"base64"}},
+		{name: "multiple transforms", input: "data.value | base64 | base64", expectPath: "data.value", expectTx: []string{"base64", "base64"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path, transforms := splitFieldTransforms(tt.input)
+			if path != tt.expectPath {
+				t.Errorf("path: expected %q, got %q", tt.expectPath, path)
+			}
+			if len(transforms) != len(tt.expectTx) {
+				t.Errorf("transforms: expected %v, got %v", tt.expectTx, transforms)
+				return
+			}
+			for i, tx := range tt.expectTx {
+				if transforms[i] != tx {
+					t.Errorf("transform %d: expected %q, got %q", i, tx, transforms[i])
+				}
+			}
+		})
+	}
+}
+
+func TestApplyTransforms(t *testing.T) {
+	tests := []struct {
+		name        string
+		value       string
+		transforms  []string
+		expected    string
+		expectError bool
+	}{
+		{name: "base64 standard", value: "aGVsbG8gd29ybGQ=", transforms: []string{"base64"}, expected: "hello world"},
+		{name: "base64 no padding", value: "aGVsbG8", transforms: []string{"base64"}, expected: "hello"},
+		{name: "base64 url-safe", value: "aHR0cHM6Ly9leGFtcGxlLmNvbS9wYXRoP2E9MSZiPTI=", transforms: []string{"base64"}, expected: "https://example.com/path?a=1&b=2"},
+		{name: "unknown transform", value: "test", transforms: []string{"unknown"}, expectError: true},
+		{name: "no transforms", value: "test", transforms: []string{}, expected: "test"},
+		{name: "double base64", value: "YUdWc2JHOD0=", transforms: []string{"base64", "base64"}, expected: "hello"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := applyTransforms(tt.value, tt.transforms)
+			if tt.expectError {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+			if result != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestValidateAssertionWithTransforms(t *testing.T) {
+	jsonBody := map[string]interface{}{
+		"data": map[string]interface{}{
+			"token":   "aGVsbG8gd29ybGQ=", // base64 of "hello world"
+			"payload": "dGVzdA==",           // base64 of "test"
+		},
+	}
+
+	t.Run("field_equals with base64 transform", func(t *testing.T) {
+		assertion := Assertion{Type: "field_equals", Field: "data.token | base64", Value: "hello world"}
+		err := validateAssertion(assertion, 200, nil, jsonBody, 0)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("field_equals with base64 transform mismatch", func(t *testing.T) {
+		assertion := Assertion{Type: "field_equals", Field: "data.token | base64", Value: "wrong value"}
+		err := validateAssertion(assertion, 200, nil, jsonBody, 0)
+		if err == nil {
+			t.Error("expected error for mismatched value")
+		}
+	})
+
+	t.Run("body_contains with base64 transform", func(t *testing.T) {
+		assertion := Assertion{Type: "body_contains", Field: "data.payload | base64"}
+		err := validateAssertion(assertion, 200, nil, jsonBody, 0)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("field_equals without transform still works", func(t *testing.T) {
+		assertion := Assertion{Type: "field_equals", Field: "data.token", Value: "aGVsbG8gd29ybGQ="}
+		err := validateAssertion(assertion, 200, nil, jsonBody, 0)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+}
+
+func TestParseAssertionsWithTransforms(t *testing.T) {
+	content := "Asserts:\n- Field `data.token | base64` equals `hello world`\n- Body contains `data.payload | base64`"
+	result := parseAssertions(content, "")
+
+	if len(result) != 2 {
+		t.Fatalf("expected 2 assertions, got %d", len(result))
+	}
+
+	if result[0].Type != "field_equals" {
+		t.Errorf("assertion 0: expected type field_equals, got %q", result[0].Type)
+	}
+	if result[0].Field != "data.token | base64" {
+		t.Errorf("assertion 0: expected field %q, got %q", "data.token | base64", result[0].Field)
+	}
+	if result[0].Value != "hello world" {
+		t.Errorf("assertion 0: expected value %q, got %q", "hello world", result[0].Value)
+	}
+
+	if result[1].Type != "body_contains" {
+		t.Errorf("assertion 1: expected type body_contains, got %q", result[1].Type)
+	}
+	if result[1].Field != "data.payload | base64" {
+		t.Errorf("assertion 1: expected field %q, got %q", "data.payload | base64", result[1].Field)
+	}
+}
+
 func TestStatusFailureShowsResponseBody(t *testing.T) {
 	// This test uses an endpoint that returns a JSON body
 	// We assert the wrong status to trigger a failure with body content
